@@ -5,7 +5,7 @@ from typing import Any
 
 from edi_reference.domain.inbound import InboundRecord, InboundStatus
 from edi_reference.domain.outbox import OutboxMessage, OutboxStatus
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 class PostgreSqlInboundStore:
@@ -60,7 +60,7 @@ class PostgreSqlInboundStore:
                 )
 
     def accept_and_enqueue(
-        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+        self, record: InboundRecord, observation: SourceObservation, message: OutboxMessage
     ) -> None:
         if record.status is not InboundStatus.ACCEPTED:
             raise ValueError("ATOMIC_ACCEPTANCE_REQUIRES_ACCEPTED_RECORD")
