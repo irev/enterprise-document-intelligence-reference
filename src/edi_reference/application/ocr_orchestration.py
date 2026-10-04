@@ -3,7 +3,7 @@
 from edi_reference.application.execution import ProviderRegistry, build_execution_plan
 from edi_reference.application.planned_provider import invoke_planned_provider
 from edi_reference.application.provider_config import ProviderConfigurationRegistry
-from edi_reference.domain.execution import Capability, CapabilityRequest, ExecutionPolicy, ProviderCapability
+from edi_reference.domain.execution import Capability, CapabilityRequest, ExecutionPolicy
 from edi_reference.domain.invocation import InvocationLimits, InvocationResult
 from edi_reference.application.invocation import ProviderInvoker
 
