@@ -39,5 +39,8 @@ class ExtractedField:
             if self.raw_value is not None or self.evidence:
                 raise ValueError("MISSING_FIELD_MUST_NOT_INVENT_VALUE")
         elif self.state is FieldState.EXPLICIT_NULL:
-            if not self.evidence:
-                raise ValueError("EXPLICIT_NULL_REQUIRES_EVIDENCE")
+            if self.raw_value is None or not self.evidence:
+                raise ValueError("EXPLICIT_NULL_REQUIRES_RAW_VALUE_AND_EVIDENCE")
+        elif self.state is FieldState.INVALID:
+            if self.raw_value is None or not self.evidence:
+                raise ValueError("INVALID_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE")
