@@ -26,20 +26,6 @@ class SourceReference:
     expected_sha256: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class SourceObservation:
-    observation_id: str
-    acquisition_id: str
-    sha256: str
-    byte_length: int
-    detected_media_type: str
-    observed_at: datetime
-    external_version: str | None = None
-    etag: str | None = None
-    source_last_modified: datetime | None = None
-    connector_version: str | None = None
-
-
 class SourceChangedError(ValueError):
     """Reacquired bytes do not match the targeted observation."""
 
