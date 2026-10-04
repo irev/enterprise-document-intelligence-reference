@@ -20,3 +20,11 @@ class InMemoryProcessingClaimRepository:
 
     def save(self, claim: ProcessingClaim) -> None:
         self.claims[claim.message_id] = claim
+
+
+    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int) -> bool:
+        current = self.claims.get(claim.message_id)
+        if current is None or current.claim_generation != expected_generation:
+            return False
+        self.claims[claim.message_id] = claim
+        return True
