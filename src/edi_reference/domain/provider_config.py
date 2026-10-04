@@ -14,8 +14,8 @@ class ProviderConfiguration:
     engine_ref: str
     secret_ref: str | None = None
     endpoint_ref: str | None = None
-    tenant_allowlist: frozenset[str] = frozenset()
-    application_allowlist: frozenset[str] = frozenset()
+    tenant_allowlist: frozenset[str] | None = None
+    application_allowlist: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if not self.provider_id or not self.config_version:
