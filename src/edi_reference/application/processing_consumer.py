@@ -27,12 +27,17 @@ class DocumentProcessor(Protocol):
     def process(self, claim: ProcessingClaim) -> None: ...
 
 
+class LeaseAwareDocumentProcessor(Protocol):
+    def process(self, claim: ProcessingClaim, renew_lease) -> None: ...
+
+
 def renew_processing_lease(
     claim: ProcessingClaim,
     *,
     repository: ProcessingClaimRepository,
     clock: Clock,
     lease_seconds: int = 300,
+    lease_aware: bool = False,
 ) -> ProcessingClaim:
     """Renew only the currently owned claim generation while its lease is still live."""
     now = clock.now()
@@ -105,7 +110,23 @@ def consume_processing_message(
             return concurrent
 
     try:
-        processor.process(claim)
+        if lease_aware:
+            active_claim = claim
+
+            def renew_lease() -> ProcessingClaim:
+                nonlocal active_claim
+                active_claim = renew_processing_lease(
+                    active_claim,
+                    repository=repository,
+                    clock=clock,
+                    lease_seconds=lease_seconds,
+                )
+                return active_claim
+
+            processor.process(claim, renew_lease)
+            claim = active_claim
+        else:
+            processor.process(claim)
     except Exception:
         failed = replace(
             claim,
