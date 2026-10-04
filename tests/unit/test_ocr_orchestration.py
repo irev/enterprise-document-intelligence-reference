@@ -29,7 +29,7 @@ def configuration(*, enabled=True):
     return ProviderConfiguration(
         "local-ocr", "cfg-1", enabled, "trusted-local", "paddle",
         tenant_allowlist=frozenset({"tenant-a"}),
-        application_allowlist=frozenset({"app-a"}),
+        application_allowlist=frozenset({("tenant-a", "app-a")}),
     )
 
 
