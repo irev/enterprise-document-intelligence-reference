@@ -300,3 +300,34 @@ def test_long_running_processor_renews_lease_before_finalization():
     assert result.status is ProcessingClaimStatus.COMPLETED
     assert result.claim_generation == 1
     assert result.lease_until == processor.renewed.lease_until
+
+
+class LeaseLosingProcessor:
+    def __init__(self, clock):
+        self.clock = clock
+
+    def process(self, claim, renew_lease):
+        self.clock.value = claim.lease_until + timedelta(seconds=1)
+        renew_lease()
+
+
+def test_long_running_processor_cannot_finalize_after_lease_loss():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+
+    result = consume_processing_message(
+        message(),
+        repository=repo,
+        processor=LeaseLosingProcessor(clock),
+        observations=Observations(),
+        clock=clock,
+        ids=Ids(),
+        lease_seconds=60,
+        lease_aware=True,
+    )
+
+    persisted = repo.get(message().message_id)
+    assert persisted is not None
+    assert persisted.status is ProcessingClaimStatus.CLAIMED
+    assert result == persisted
+    assert result.status is not ProcessingClaimStatus.COMPLETED
