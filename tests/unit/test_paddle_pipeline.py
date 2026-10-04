@@ -5,8 +5,7 @@ from pathlib import Path
 import pytest
 
 from edi_reference.adapters.paddle_pipeline import (
-    PaddlePipelineConfiguration,
-    build_paddle_pipeline,
+    PaddleOcrEngineFactory,\n    PaddlePipelineConfiguration,\n    build_paddle_pipeline,
     load_governed_model,
 )
 
@@ -83,3 +82,15 @@ def test_factory_uses_explicit_v6_model_names(
         "text_detection_model_name": "PP-OCRv6_medium_det",
         "text_recognition_model_name": "PP-OCRv6_medium_rec",
     }
+
+
+def test_engine_factory_is_pickle_safe_configuration(tmp_path: Path) -> None:
+    import pickle
+
+    factory = PaddleOcrEngineFactory(
+        PaddlePipelineConfiguration("pp-ocrv6-medium", tmp_path)
+    )
+
+    restored = pickle.loads(pickle.dumps(factory))
+
+    assert restored.configuration == factory.configuration
