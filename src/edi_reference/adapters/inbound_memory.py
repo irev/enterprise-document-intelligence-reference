@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 from edi_reference.domain.inbound import InboundRecord, ProcessingDispatch
+from edi_reference.domain.outbox import OutboxMessage
 
 
 @dataclass
@@ -28,3 +29,19 @@ class InMemoryProcessingDispatcher:
 
     def dispatch(self, item: ProcessingDispatch) -> None:
         self.items.append(item)
+
+
+@dataclass
+class InMemoryAtomicAcceptanceStore:
+    """Test adapter modelling one atomic commit of accepted state + outbox."""
+
+    repository: InMemoryInboundRepository
+    outbox: dict[str, OutboxMessage] = field(default_factory=dict)
+    fail_before_commit: bool = False
+
+    def accept_and_enqueue(self, record: InboundRecord, message: OutboxMessage) -> None:
+        if self.fail_before_commit:
+            raise RuntimeError("ATOMIC_ACCEPTANCE_FAILED")
+        # Mutate both only after all pre-commit work succeeds.
+        self.repository.save(record)
+        self.outbox[message.message_id] = message
