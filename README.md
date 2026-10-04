@@ -4,7 +4,7 @@ Reference implementation for the technology-neutral [Enterprise Document Intelli
 
 ## Status
 
-**RI-0.5 — Shared service architecture foundation**
+**RI-5.13 — Provider authorization security complete; durable processing hardening continues**
 
 This repository demonstrates one possible implementation of the specification. It is **not** the normative source of platform behavior. When implementation behavior conflicts with the specification, the specification and its versioned contracts take precedence.
 
@@ -55,17 +55,13 @@ RI-0 is complete when the implementation can:
 5. emit a machine-readable conformance report shape;
 6. run deterministic unit tests without OCR/model/network dependencies.
 
-## Planned sequence
+## Milestone progression
 
-```text
-RI-0 Contract + Conformance
-  -> RI-1 Deterministic Ingestion
-  -> RI-2 Parser / OCR Adapter
-  -> RI-3 Classification + Extraction
-  -> RI-4 Normalization + Validation
-  -> RI-5 Versioning + Human Review
-  -> RI-6 Bundle + Business Profile
-```
+RI-0 through RI-4 established the portable contract, deterministic ingestion, parser/OCR, classification/extraction, and normalization/validation foundations.
+
+RI-5 is the active durability and control-plane series. RI-5.0 through RI-5.13 cover PostgreSQL control-plane persistence, explicit provider authorization, durable inbound/outbox and source lineage, processing ownership/lease fencing, observation identity and referential integrity, long-running processing safety, and tenant-scoped provider authorization.
+
+The next implementation work continues durable processing/result/evidence behavior before human review and shared-service production hardening.
 
 ## Confidentiality
 
