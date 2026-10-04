@@ -58,5 +58,6 @@ jobs:
           psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0003_source_lineage.sql
           psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0004_processing_claim.sql
           psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0005_observation_dispatch.sql
+          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0006_lineage_referential_integrity.sql
       - name: PostgreSQL integration tests
         run: python -m pytest tests/integration -vv
