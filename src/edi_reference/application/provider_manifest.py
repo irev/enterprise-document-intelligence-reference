@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 
@@ -23,14 +24,14 @@ class ProviderManifest:
     providers: dict[str, ProviderDefinition]
 
 
-def default_manifest_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "deploy" / "runtime-profiles" / "providers.toml"
-
-
 def load_provider_manifest(path: Path | None = None) -> ProviderManifest:
-    manifest_path = path or default_manifest_path()
-    with manifest_path.open("rb") as handle:
-        raw = tomllib.load(handle)
+    if path is None:
+        resource = resources.files("edi_reference").joinpath("runtime/providers.toml")
+        with resource.open("rb") as handle:
+            raw = tomllib.load(handle)
+    else:
+        with path.open("rb") as handle:
+            raw = tomllib.load(handle)
 
     schema_version = raw.get("schema_version")
     if schema_version != "1":
