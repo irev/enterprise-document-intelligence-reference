@@ -136,6 +136,11 @@ def test_atomic_acceptance_persists_state_and_pending_outbox_together() -> None:
     assert len(store.outbox) == 1
     message = next(iter(store.outbox.values()))
     assert message.aggregate_id == result.inbound_id
+    assert message.observation_id is not None
+    assert message.observation_id in store.observations
+    observation = store.observations[message.observation_id]
+    assert observation.document_id == result.inbound_id
+    assert observation.sha256 == result.observation_sha256
     assert message.payload_ref == "sha256:" + result.observation_sha256
 
 
@@ -160,6 +165,7 @@ def test_atomic_acceptance_failure_does_not_persist_accepted_state_or_outbox() -
             ids=SequentialIds(),
         )
     assert not store.outbox
+    assert not store.observations
     assert all(record.status.value != "ACCEPTED" for record in repository.records.values())
 
 
