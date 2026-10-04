@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any\n\nfrom edi_reference.adapters.paddle_ocr import PaddleOcrEngine
+from typing import Any
 
+from edi_reference.adapters.paddle_ocr import PaddleOcrEngine
 from edi_reference.application.paddle_models import ModelArtifactState, verify_paddle_model
 
 
