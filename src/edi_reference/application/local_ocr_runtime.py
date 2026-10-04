@@ -62,7 +62,6 @@ def resolve_local_ocr_engine(
     configurations: ProviderConfigurationSource,
     tenant_id: str,
     application_id: str,
-    timeout_seconds: float = 120.0,
 ) -> tuple[ResolvedProvider, ProcessIsolatedOcrEngine]:
     if step.capability not in {Capability.TEXT_EXTRACTION, Capability.LAYOUT}:
         raise ValueError("LOCAL_OCR_CAPABILITY_REQUIRED")
@@ -92,4 +91,4 @@ def resolve_local_ocr_engine(
             require_local_pinned=binding.require_local_pinned,
         )
     )
-    return resolved, ProcessIsolatedOcrEngine(factory, timeout_seconds=timeout_seconds)
+    return resolved, ProcessIsolatedOcrEngine(factory)
