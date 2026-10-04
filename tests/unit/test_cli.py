@@ -33,8 +33,8 @@ def test_reject_mps_outside_macos() -> None:
         raise AssertionError("expected MPS platform rejection")
 
 
-def test_cli_install_requires_dry_run(capsys) -> None:
+def test_cli_install_requires_explicit_confirmation(capsys) -> None:
     result = main(["install", "--provider", "paddle-ocr", "--profile", "cpu"])
 
     assert result == 2
-    assert "INSTALL_EXECUTION_NOT_IMPLEMENTED_USE_DRY_RUN" in capsys.readouterr().out
+    assert "INSTALL_CONFIRMATION_REQUIRED_USE_YES" in capsys.readouterr().out
