@@ -40,3 +40,27 @@ def test_borderline_measurement_is_not_silently_forced():
 def test_quality_ranges_are_validated(coverage):
     with pytest.raises(ValueError, match="INVALID_TEXT_COVERAGE"):
         page(text=coverage)
+
+
+@pytest.mark.parametrize(
+    ("changes", "error"),
+    [
+        ({"min_native_characters": -1}, "INVALID_OCR_MIN_NATIVE_CHARACTERS"),
+        ({"min_native_text_coverage": -0.01}, "INVALID_OCR_TEXT_COVERAGE_THRESHOLD"),
+        ({"min_native_text_coverage": 1.01}, "INVALID_OCR_TEXT_COVERAGE_THRESHOLD"),
+        ({"image_dominance_threshold": -0.01}, "INVALID_OCR_IMAGE_DOMINANCE_THRESHOLD"),
+        ({"image_dominance_threshold": 1.01}, "INVALID_OCR_IMAGE_DOMINANCE_THRESHOLD"),
+        ({"uncertain_margin": -0.01}, "INVALID_OCR_UNCERTAIN_MARGIN"),
+        ({"uncertain_margin": 1.01}, "INVALID_OCR_UNCERTAIN_MARGIN"),
+    ],
+)
+def test_ocr_policy_rejects_invalid_ranges(changes, error):
+    values = dict(
+        min_native_characters=40,
+        min_native_text_coverage=.10,
+        image_dominance_threshold=.80,
+        uncertain_margin=.05,
+    )
+    values.update(changes)
+    with pytest.raises(ValueError, match=error):
+        OcrDecisionPolicy(**values)
