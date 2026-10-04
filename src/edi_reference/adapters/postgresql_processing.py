@@ -68,7 +68,7 @@ class PostgreSqlProcessingClaimRepository:
                 if cursor.rowcount != 1:
                     raise ValueError("PROCESSING_CLAIM_NOT_FOUND")
 
-    def try_reclaim(self, claim: ProcessingClaim, expected_generation: int) -> bool:
+    def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         """Advance an existing claim only if the caller still owns the observed generation."""
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -85,7 +85,7 @@ class PostgreSqlProcessingClaimRepository:
                         claim.processing_run_id, claim.tenant_id, claim.application_id,
                         claim.observation_sha256, claim.status.value, claim.claimed_at,
                         claim.lease_until, claim.claim_generation, claim.completed_at,
-                        claim.failure_code, claim.message_id, expected_generation,
+                        claim.failure_code, claim.message_id, expected_generation, now,
                     ),
                 )
                 return cursor.rowcount == 1
