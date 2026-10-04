@@ -32,3 +32,9 @@ def test_identifier_preserves_semantics_while_trimming():
 def test_unknown_normalizer_fails_explicitly():
     with pytest.raises(NormalizationError, match="NORMALIZER_NOT_FOUND"):
         REGISTRY.normalize("x", normalizer_id="unknown", version="1")
+
+
+@pytest.mark.parametrize("value", ["2026-10-4", "2026-1-04", "20261004", "2026-W40-7"])
+def test_iso_date_requires_exact_calendar_date_shape(value):
+    with pytest.raises(NormalizationError, match="INVALID_DATE_FORMAT"):
+        REGISTRY.normalize(value, normalizer_id="date.iso-8601", version="1")
