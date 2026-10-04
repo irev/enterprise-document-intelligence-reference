@@ -128,5 +128,5 @@ def test_stale_worker_cannot_overwrite_newer_claim_generation():
         claimed_at=now - timedelta(minutes=10), lease_until=now - timedelta(minutes=5),
         claim_generation=7, completed_at=now,
     )
-    assert repo.save_if_generation(stale_completion, 7) is False
+    assert repo.save_if_generation(stale_completion, 7, now=now) is False
     assert repo.get("msg-1") == newer
