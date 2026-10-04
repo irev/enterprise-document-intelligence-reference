@@ -1,4 +1,4 @@
-# Model Runtime Installation Strategy
+# Model Runtime Installation Strategy\n\nFor executable operator commands, start with `INSTALLATION.md`. This document defines runtime architecture and isolation policy.
 
 Model runtimes are deployment capabilities, not core domain dependencies.
 
@@ -15,8 +15,8 @@ Model runtimes are deployment capabilities, not core domain dependencies.
 
 | Capability | Provider/model | Role | Install boundary |
 |---|---|---|---|
-| OCR | PaddleOCR / PP-OCRv5 | primary OCR | Paddle worker |
-| Document structure | PaddleOCR / PP-StructureV3 | primary structure candidate | Paddle worker |
+| OCR | PaddleOCR / PP-OCRv6 medium | primary OCR candidate | Paddle worker |
+| OCR compatibility | PaddleOCR / PP-OCRv5 server | compatibility/benchmark candidate | Paddle worker |\n| Document structure | PaddleOCR / PP-StructureV3 | primary structure candidate | Paddle worker |
 | Document parsing | Docling | parser challenger/composition | Docling worker |
 | Vision-language | Qwen2.5-VL-7B-Instruct | primary local VLM baseline | PyTorch VLM worker |
 | Vision-language | Qwen2.5-VL-3B-Instruct | constrained-hardware fallback | PyTorch VLM worker |
