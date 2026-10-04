@@ -59,3 +59,10 @@ Tests cover:
 - prevention of terminal publication after lease loss.
 
 The processor decides when to request renewal. Automatic background heartbeat scheduling is an operational concern and is intentionally outside this milestone.
+
+
+## Failure boundary
+
+Lease-aware processors follow the same processing-failure contract as ordinary processors: an expected document-level failure is reported with `ProcessingFailure` and may become the durable stable code `PROCESSING_FAILED` only while finalization ownership is still valid.
+
+`CLAIM_LEASE_LOST` is an ownership/control failure, not a document-processing failure. It propagates and leaves the claim non-terminal so that normal lease expiry and reclaim semantics can recover the work. Unexpected programming defects also propagate instead of being mislabeled as `PROCESSING_FAILED`.
