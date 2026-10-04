@@ -7,7 +7,7 @@ from typing import Protocol
 from edi_reference.domain.ingestion import Clock, IdGenerator
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 class ProcessingClaimRepository(Protocol):
@@ -19,7 +19,7 @@ class ProcessingClaimRepository(Protocol):
 
 
 class ObservationRepository(Protocol):
-    def get(self, observation_id: str) -> ScopedObservation | None: ...
+    def get(self, observation_id: str) -> SourceObservation | None: ...
 
 
 class DocumentProcessor(Protocol):
