@@ -153,9 +153,15 @@ def main(argv: list[str] | None = None) -> int:
         if not args.yes:
             print("MODEL_PULL_CONFIRMATION_REQUIRED_USE_YES")
             return 2
-        runtime_python_path = runtime_python(args.runtime_root / "paddle-ocr" / args.profile)
-        if not runtime_python_path.is_file():
-            print("PADDLE_RUNTIME_NOT_INSTALLED")
+        runtime_dir = args.runtime_root / "paddle-ocr" / args.profile
+        runtime_python_path = runtime_python(runtime_dir)
+        try:
+            runtime_state = read_install_state(runtime_dir)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            print(str(exc))
+            return 2
+        if runtime_state.status != "READY" or not runtime_python_path.is_file():
+            print("PADDLE_RUNTIME_NOT_READY")
             return 2
         try:
             state = warm_paddle_model(
@@ -195,11 +201,22 @@ def main(argv: list[str] | None = None) -> int:
             print("INSTALL_CONFIRMATION_REQUIRED_USE_YES")
             return 2
         try:
+            capabilities = inspect_host_capabilities(
+                nvidia_driver_version=host.nvidia_driver_version
+            )
+            requirement = provider_runtime_requirement(
+                args.provider, args.profile, host_os=capabilities.os
+            )
+            resolved_runtime = resolve_runtime(capabilities, requirement)
+            if resolved_runtime.status is not CompatibilityStatus.COMPATIBLE:
+                print(resolved_runtime.reason or "RUNTIME_INCOMPATIBLE")
+                return 2
             result = service.install_provider(
                 provider_id=args.provider,
                 profile=args.profile,
                 host=host,
                 runtime_root=args.runtime_root,
+                resolved_runtime=resolved_runtime,
             )
         except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             print(str(exc))
