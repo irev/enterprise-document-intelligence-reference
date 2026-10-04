@@ -23,7 +23,12 @@ jobs:
         run: python -m ruff check src tests
 
   typecheck:
-    runs-on: ubuntu-latest
+    name: typecheck (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
