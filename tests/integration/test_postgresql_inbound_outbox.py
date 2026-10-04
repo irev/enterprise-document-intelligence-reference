@@ -79,12 +79,18 @@ def test_failed_outbox_insert_rolls_back_acceptance():
             cursor.execute("DELETE FROM ingestion.inbound_request WHERE inbound_id='inbound-atomic'")
     store.save(record())
 
-    bad = OutboxMessage(
-        "message-bad", "atomic-tenant", "atomic-app", "corr", "inbound-atomic",
-        "PROCESS_DOCUMENT", None, datetime.now(UTC),  # DB NOT NULL forces rollback.
+    # Duplicate message_id makes the outbox INSERT fail after the inbound UPDATE.
+    first = message()
+    store.accept_and_enqueue(record(InboundStatus.ACCEPTED), first)
+    # Restore ACQUIRING while keeping the committed outbox row to create a
+    # database-level uniqueness failure inside the next atomic transaction.
+    store.save(record(InboundStatus.ACQUIRING))
+    duplicate = OutboxMessage(
+        first.message_id, "atomic-tenant", "atomic-app", "corr", "inbound-atomic",
+        "PROCESS_DOCUMENT", "sha256:" + "b" * 64, datetime.now(UTC),
     )
     with pytest.raises(Exception):
-        store.accept_and_enqueue(record(InboundStatus.ACCEPTED), bad)
+        store.accept_and_enqueue(record(InboundStatus.ACCEPTED), duplicate)
 
     persisted = store.get_by_idempotency("atomic-tenant", "atomic-app", "idem")
     assert persisted.status is InboundStatus.ACQUIRING
