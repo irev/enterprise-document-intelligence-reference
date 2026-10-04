@@ -88,7 +88,10 @@ def consume_processing_message(
     ids: IdGenerator,
     lease_seconds: int = 300,
     lease_aware: bool = False,
+    processor_finalizes_success: bool = False,
 ) -> ProcessingClaim:
+    if lease_aware and processor_finalizes_success:
+        raise ValueError("AMBIGUOUS_PROCESSOR_FINALIZATION_MODE")
     if message.message_type != "PROCESS_DOCUMENT":
         raise ValueError("UNSUPPORTED_MESSAGE_TYPE")
     if message.observation_id is None:
@@ -151,6 +154,8 @@ def consume_processing_message(
 
             cast(LeaseAwareDocumentProcessor, processor).process(claim, renew_lease)
             claim = active_claim
+        elif processor_finalizes_success:
+            cast(FinalizingDocumentProcessor, processor).process_and_finalize(claim)
         else:
             cast(DocumentProcessor, processor).process(claim)
     except ProcessingFailure:
@@ -165,6 +170,17 @@ def consume_processing_message(
                 raise RuntimeError("CLAIM_LOST")
             return current
         return failed
+
+    if processor_finalizes_success:
+        persisted = repository.get(message.message_id)
+        if persisted is None:
+            raise RuntimeError("CLAIM_LOST")
+        if (
+            persisted.claim_generation != claim.claim_generation
+            or persisted.status is not ProcessingClaimStatus.COMPLETED
+        ):
+            raise RuntimeError("PROCESSOR_FINALIZATION_NOT_COMMITTED")
+        return persisted
 
     completed = replace(
         claim,
