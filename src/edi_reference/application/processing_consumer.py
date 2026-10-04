@@ -13,6 +13,7 @@ class ProcessingClaimRepository(Protocol):
     def get(self, message_id: str) -> ProcessingClaim | None: ...
     def try_create(self, claim: ProcessingClaim) -> bool: ...
     def save(self, claim: ProcessingClaim) -> None: ...
+    def try_reclaim(self, claim: ProcessingClaim, expected_generation: int) -> bool: ...
     def save_if_generation(self, claim: ProcessingClaim, expected_generation: int) -> bool: ...
 
 
@@ -63,7 +64,11 @@ def consume_processing_message(
             raise RuntimeError("CLAIM_CONFLICT")
         return concurrent
     if existing is not None:
-        repository.save(claim)
+        if not repository.try_reclaim(claim, existing.claim_generation):
+            concurrent = repository.get(message.message_id)
+            if concurrent is None:
+                raise RuntimeError("CLAIM_CONFLICT")
+            return concurrent
 
     try:
         processor.process(claim)
