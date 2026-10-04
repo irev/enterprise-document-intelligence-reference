@@ -30,7 +30,7 @@ def test_high_confidence_separated_candidate_is_accepted():
     result = classify_document(DOC, classifier=Classifier([
         ClassificationCandidate("INVOICE", .94),
         ClassificationCandidate("PURCHASE_ORDER", .20),
-    ]), policy=POLICY)
+    ]), policy=POLICY, taxonomy=TAXONOMY)
     assert result.document_type == "INVOICE"
     assert result.model_version == "1"
     assert result.evidence == EVIDENCE
@@ -39,7 +39,7 @@ def test_high_confidence_separated_candidate_is_accepted():
 def test_low_confidence_abstains_to_unknown():
     result = classify_document(DOC, classifier=Classifier([
         ClassificationCandidate("INVOICE", .70),
-    ]), policy=POLICY)
+    ]), policy=POLICY, taxonomy=TAXONOMY)
     assert result.document_type == UNKNOWN_DOCUMENT_TYPE
 
 
@@ -47,12 +47,12 @@ def test_ambiguous_top_candidates_abstain_to_unknown():
     result = classify_document(DOC, classifier=Classifier([
         ClassificationCandidate("INVOICE", .91),
         ClassificationCandidate("PURCHASE_ORDER", .86),
-    ]), policy=POLICY)
+    ]), policy=POLICY, taxonomy=TAXONOMY)
     assert result.document_type == UNKNOWN_DOCUMENT_TYPE
 
 
 def test_empty_prediction_abstains_to_unknown():
-    result = classify_document(DOC, classifier=Classifier([]), policy=POLICY)
+    result = classify_document(DOC, classifier=Classifier([]), policy=POLICY, taxonomy=TAXONOMY)
     assert result.document_type == UNKNOWN_DOCUMENT_TYPE
 
 
