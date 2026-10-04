@@ -116,7 +116,6 @@ def main(argv: list[str] | None = None) -> int:
         try:
             service = RuntimeManagementService(load_provider_manifest())
             runtime_dir = args.runtime_root / args.provider / args.profile
-            from edi_reference.application.runtime_installer import ensure_runtime_venv
             python_executable = str(runtime_dir / "venv" / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python"))
             plan = service.plan_install(
                 provider_id=args.provider,
