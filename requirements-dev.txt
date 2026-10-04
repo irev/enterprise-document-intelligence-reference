@@ -1,0 +1,2 @@
+# Local development and unit-test bootstrap.
+-e .[dev]
