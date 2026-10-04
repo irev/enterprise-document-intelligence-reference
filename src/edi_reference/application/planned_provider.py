@@ -1,7 +1,7 @@
 """Resolve a planned step through control-plane authorization before invocation."""
 
 from edi_reference.application.provider_config import (
-    ProviderConfigurationRegistry,
+    ProviderConfigurationSource,
     resolve_provider,
 )
 from edi_reference.domain.execution import ExecutionPolicy, PlannedStep, ProviderCapability
@@ -14,7 +14,7 @@ def authorize_planned_provider(
     step: PlannedStep,
     *,
     provider: ProviderCapability,
-    configurations: ProviderConfigurationRegistry,
+    configurations: ProviderConfigurationSource,
     tenant_id: str,
     application_id: str,
 ) -> ResolvedProvider:
@@ -41,7 +41,7 @@ def invoke_planned_provider(
     attempt_id: str,
     input_bytes: bytes,
     provider: ProviderCapability,
-    configurations: ProviderConfigurationRegistry,
+    configurations: ProviderConfigurationSource,
     tenant_id: str,
     application_id: str,
     policy: ExecutionPolicy,
