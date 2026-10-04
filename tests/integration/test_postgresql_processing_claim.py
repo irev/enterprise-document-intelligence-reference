@@ -64,7 +64,7 @@ def test_stale_generation_cannot_complete_reclaimed_claim():
         ProcessingClaimStatus.COMPLETED, generation_1.claimed_at,
         generation_1.lease_until, 1, completed_at=now,
     )
-    assert repo.save_if_generation(stale_completion, 1) is False
+    assert repo.save_if_generation(stale_completion, 1, now=now) is False
     assert repo.get("claim-message") == generation_2
 
     valid_completion = ProcessingClaim(
@@ -72,5 +72,5 @@ def test_stale_generation_cannot_complete_reclaimed_claim():
         ProcessingClaimStatus.COMPLETED, generation_2.claimed_at,
         generation_2.lease_until, 2, completed_at=now,
     )
-    assert repo.save_if_generation(valid_completion, 2)
+    assert repo.save_if_generation(valid_completion, 2, now=now)
     assert repo.get("claim-message").status is ProcessingClaimStatus.COMPLETED
