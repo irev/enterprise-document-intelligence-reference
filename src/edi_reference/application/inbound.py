@@ -1,6 +1,8 @@
 """RI-1.5 durable inbound lifecycle orchestration."""
 
 from dataclasses import replace
+import hashlib
+import json
 from typing import Protocol
 
 from edi_reference.application.acquire import AcquisitionOutcome, acquire_and_validate
@@ -21,6 +23,22 @@ from edi_reference.application.security import validate_source_reference
 class InboundRepository(Protocol):
     def get_by_idempotency(self, tenant_id: str, application_id: str, key: str) -> InboundRecord | None: ...
     def save(self, record: InboundRecord) -> None: ...
+
+
+class IdempotencyConflict(ValueError):
+    pass
+
+
+def request_fingerprint(source: SourceReference) -> str:
+    material = {
+        "method": source.method.value,
+        "resource_locator": source.resource_locator,
+        "connector_id": source.connector_id,
+        "external_version": source.external_version,
+        "expected_sha256": source.expected_sha256.lower() if source.expected_sha256 else None,
+    }
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class ProcessingDispatcher(Protocol):
@@ -53,10 +71,13 @@ def receive_document(
     if not context.request_id or not context.idempotency_key:
         raise ValueError("REQUEST_ID_AND_IDEMPOTENCY_KEY_REQUIRED")
 
+    fingerprint = request_fingerprint(source)
     existing = repository.get_by_idempotency(
         context.tenant_id, context.application_id, context.idempotency_key
     )
     if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise IdempotencyConflict("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST")
         return existing
 
     now = clock.now()
@@ -67,6 +88,7 @@ def receive_document(
         correlation_id=context.correlation_id,
         request_id=context.request_id,
         idempotency_key=context.idempotency_key,
+        request_fingerprint=fingerprint,
         source_method=source.method.value,
         status=InboundStatus.RECEIVED,
         received_at=now,
