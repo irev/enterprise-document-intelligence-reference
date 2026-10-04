@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Protocol
+from typing import Callable, Protocol, cast
 
 from edi_reference.domain.ingestion import Clock, IdGenerator
 from edi_reference.domain.outbox import OutboxMessage
@@ -143,10 +143,10 @@ def consume_processing_message(
                 )
                 return active_claim
 
-            processor.process(claim, renew_lease)
+            cast(LeaseAwareDocumentProcessor, processor).process(claim, renew_lease)
             claim = active_claim
         else:
-            processor.process(claim)
+            cast(DocumentProcessor, processor).process(claim)
     except ProcessingFailure:
         failed = replace(
             claim,
