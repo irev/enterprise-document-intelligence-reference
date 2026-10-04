@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from edi_reference.domain.inbound import InboundRecord, ProcessingDispatch
 from edi_reference.domain.outbox import OutboxMessage
+from edi_reference.domain.lineage import ScopedObservation
 
 
 @dataclass
@@ -37,11 +38,19 @@ class InMemoryAtomicAcceptanceStore:
 
     repository: InMemoryInboundRepository
     outbox: dict[str, OutboxMessage] = field(default_factory=dict)
+    observations: dict[str, ScopedObservation] = field(default_factory=dict)
     fail_before_commit: bool = False
 
-    def accept_and_enqueue(self, record: InboundRecord, message: OutboxMessage) -> None:
+    def accept_and_enqueue(
+        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+    ) -> None:
         if self.fail_before_commit:
             raise RuntimeError("ATOMIC_ACCEPTANCE_FAILED")
-        # Mutate both only after all pre-commit work succeeds.
+        if observation.document_id != record.inbound_id:
+            raise ValueError("OBSERVATION_DOCUMENT_MISMATCH")
+        if message.observation_id != observation.observation_id:
+            raise ValueError("OUTBOX_OBSERVATION_MISMATCH")
+        # Mutate all state only after pre-commit validation succeeds.
         self.repository.save(record)
+        self.observations[observation.observation_id] = observation
         self.outbox[message.message_id] = message
