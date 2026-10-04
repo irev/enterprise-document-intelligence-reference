@@ -12,7 +12,7 @@ from pathlib import Path
 
 from edi_reference.application.paddle_models import verify_paddle_model, warm_paddle_model
 from edi_reference.application.provider_manifest import load_provider_manifest
-from edi_reference.application.runtime_installer import runtime_python
+from edi_reference.application.runtime_bootstrap import (\n    CompatibilityStatus,\n    resolve_runtime,\n)\nfrom edi_reference.application.runtime_installer import runtime_python\nfrom edi_reference.application.runtime_requirements import provider_runtime_requirement\nfrom edi_reference.adapters.host_capabilities import inspect_host_capabilities
 from edi_reference.application.runtime_management import RuntimeManagementService
 
 
