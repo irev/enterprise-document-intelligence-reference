@@ -3,8 +3,10 @@
 from typing import Protocol
 
 from edi_reference.application.evidence import validate_evidence
+from edi_reference.application.field_schema import validate_extracted_fields
 from edi_reference.domain.document_structure import StructuredDocument
 from edi_reference.domain.extraction import ExtractedField
+from edi_reference.domain.field_schema import ExtractionSchema
 
 
 class ExtractorAdapter(Protocol):
@@ -19,8 +21,14 @@ def extract_fields(
     *,
     document_type: str,
     extractor: ExtractorAdapter,
+    schema: ExtractionSchema,
 ) -> tuple[ExtractedField, ...]:
     fields = extractor.extract(document, document_type)
+    validate_extracted_fields(
+        fields,
+        schema=schema,
+        extractor_schema_version=extractor.schema_version,
+    )
     names: set[str] = set()
     for field in fields:
         if field.field_name in names:
