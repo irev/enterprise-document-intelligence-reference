@@ -8,15 +8,14 @@ from typing import Any
 
 from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
-from edi_reference.application.runtime_bootstrap import (
-    CompatibilityStatus,
-    ResolvedRuntime,
-)
+from edi_reference.application.runtime_bootstrap import CompatibilityStatus, ResolvedRuntime
 from edi_reference.application.runtime_installer import (
     InstallExecutionResult,
     InstallStepFailed,
     ensure_runtime_venv,
     execute_steps,
+    query_python_version,
+    verify_runtime,
     write_install_state,
 )
 
@@ -58,13 +57,11 @@ class RuntimeManagementService:
             raise ValueError("UNKNOWN_PROVIDER")
         if profile not in definition.profiles:
             raise ValueError("UNSUPPORTED_PROVIDER_PROFILE")
-
-        host_data = asdict(host)  # HostInfo is an adapter DTO; service stores no host state.
+        host_data = asdict(host)
         if profile == "nvidia" and not host_data.get("nvidia_smi"):
             raise ValueError("NVIDIA_RUNTIME_NOT_DETECTED")
         if profile == "mps" and host_data.get("os") != "darwin":
             raise ValueError("MPS_REQUIRES_MACOS")
-
         payload: dict[str, object] = {
             "provider": provider_id,
             "profile": profile,
@@ -78,7 +75,9 @@ class RuntimeManagementService:
                 profile=profile,
                 nvidia_driver_version=host_data.get("nvidia_driver_version"),
             )
-            payload["steps"] = [{"name": step.name, "argv": list(step.argv)} for step in paddle.steps]
+            payload["steps"] = [
+                {"name": step.name, "argv": list(step.argv)} for step in paddle.steps
+            ]
             payload["verify_argv"] = list(paddle.verify_argv)
         return payload
 
@@ -89,11 +88,30 @@ class RuntimeManagementService:
         profile: str,
         host: Any,
         runtime_root: Path,
+        resolved_runtime: ResolvedRuntime,
     ) -> InstallExecutionResult:
         if provider_id != "paddle-ocr":
             raise ValueError("INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER")
+        if (
+            resolved_runtime.status is not CompatibilityStatus.COMPATIBLE
+            or resolved_runtime.provider_id != provider_id
+            or resolved_runtime.profile != profile
+            or resolved_runtime.python is None
+        ):
+            raise ValueError("COMPATIBLE_RUNTIME_RESOLUTION_REQUIRED")
+
         runtime_dir = runtime_root / provider_id / profile
-        python_executable = str(ensure_runtime_venv(runtime_dir))
+        python_path = ensure_runtime_venv(
+            runtime_dir,
+            base_python=resolved_runtime.python.executable,
+        )
+        actual_python_version = query_python_version(python_path)
+        expected = resolved_runtime.python.version[:2]
+        actual_parts = tuple(int(item) for item in actual_python_version.split(".")[:2])
+        if actual_parts != expected:
+            raise ValueError("RUNTIME_PYTHON_VERSION_MISMATCH")
+
+        python_executable = str(python_path)
         self.plan_install(
             provider_id=provider_id,
             profile=profile,
@@ -107,23 +125,29 @@ class RuntimeManagementService:
         )
         try:
             steps = execute_steps(paddle.steps)
-        except InstallStepFailed as exc:
+            verification = verify_runtime(paddle.verify_argv)
+            python_version = query_python_version(python_path)
+        except (InstallStepFailed, RuntimeError) as exc:
             failed = InstallExecutionResult(
                 provider_id=provider_id,
                 profile=profile,
                 runtime_dir=str(runtime_dir),
                 status="FAILED",
-                steps=exc.results,
+                steps=(),
                 error_code=str(exc),
+                runtime_python=str(python_path),
             )
             write_install_state(runtime_dir, failed)
             raise
+
         result = InstallExecutionResult(
             provider_id=provider_id,
             profile=profile,
             runtime_dir=str(runtime_dir),
-            status="INSTALLED",
-            steps=steps,
+            status="READY",
+            steps=steps + (verification,),
+            runtime_python=str(python_path),
+            runtime_python_version=python_version,
         )
         write_install_state(runtime_dir, result)
         return result
