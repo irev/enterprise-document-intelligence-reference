@@ -312,25 +312,27 @@ class LeaseLosingProcessor:
 
 
 def test_long_running_processor_cannot_finalize_after_lease_loss():
+    import pytest
+
     clock = Clock()
     repo = InMemoryProcessingClaimRepository()
 
-    result = consume_processing_message(
-        message(),
-        repository=repo,
-        processor=LeaseLosingProcessor(clock),
-        observations=Observations(),
-        clock=clock,
-        ids=Ids(),
-        lease_seconds=60,
-        lease_aware=True,
-    )
+    with pytest.raises(RuntimeError, match="CLAIM_LEASE_LOST"):
+        consume_processing_message(
+            message(),
+            repository=repo,
+            processor=LeaseLosingProcessor(clock),
+            observations=Observations(),
+            clock=clock,
+            ids=Ids(),
+            lease_seconds=60,
+            lease_aware=True,
+        )
 
     persisted = repo.get(message().message_id)
     assert persisted is not None
     assert persisted.status is ProcessingClaimStatus.CLAIMED
-    assert result == persisted
-    assert result.status is not ProcessingClaimStatus.COMPLETED
+    assert persisted.failure_code is None
 
 
 
