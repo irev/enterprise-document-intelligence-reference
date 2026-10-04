@@ -22,6 +22,7 @@ class InboundRecord:
     correlation_id: str
     request_id: str
     idempotency_key: str
+    request_fingerprint: str
     source_method: str
     status: InboundStatus
     received_at: datetime
