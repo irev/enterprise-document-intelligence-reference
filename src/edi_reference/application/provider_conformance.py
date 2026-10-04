@@ -20,6 +20,11 @@ def check_provider_adapter(adapter: ProviderAdapter) -> tuple[ConformanceFinding
         ConformanceFinding("DESCRIPTOR_VALID", bool(descriptor.adapter_id and descriptor.adapter_version)),
         ConformanceFinding("PROVIDER_ID_VALID", bool(provider.provider_id and provider.provider_version)),
         ConformanceFinding("CAPABILITIES_DECLARED", bool(provider.capabilities)),
+        ConformanceFinding(
+            "EGRESS_CLASS_CONSISTENT",
+            (provider.execution_class is ExecutionClass.REMOTE_MODEL and provider.data_egress.name == "APPROVED_EXTERNAL")
+            or (provider.execution_class is not ExecutionClass.REMOTE_MODEL and provider.data_egress.name == "NONE"),
+        ),
     ]
 
     # Probe only contract rejection behavior. Conformance must never require
