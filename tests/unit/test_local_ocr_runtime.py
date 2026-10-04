@@ -124,7 +124,6 @@ def test_resolve_builds_isolated_engine_after_authorization() -> None:
         configurations=configs,
         tenant_id="tenant-a",
         application_id="app-a",
-        timeout_seconds=30,
     )
 
     assert resolved.configuration.provider_id == "paddle-ocr"
