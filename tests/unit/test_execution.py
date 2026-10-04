@@ -2,8 +2,8 @@ import pytest
 
 from edi_reference.application.execution import ExecutionPlanningError, ProviderRegistry, build_execution_plan
 from edi_reference.domain.execution import (
-    Capability, CapabilityRequest, DataEgress, ExecutionClass,
-    ExecutionPolicy, ProviderCapability,
+    Capability, CapabilityExecutionPolicy, CapabilityRequest, DataEgress, ExecutionClass,
+    ExecutionPolicy, ProviderCapability, ProviderHealth,
 )
 
 
@@ -64,3 +64,70 @@ def test_capabilities_can_use_different_execution_classes():
         (Capability.TEXT_EXTRACTION, ExecutionClass.OCR),
         (Capability.CLASSIFICATION, ExecutionClass.LOCAL_MODEL),
     }
+
+
+def test_capability_preference_can_choose_local_before_remote():
+    policy = ExecutionPolicy(
+        "prefer-local", "1",
+        frozenset({ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL}),
+        True, True,
+        (CapabilityExecutionPolicy(
+            Capability.CLASSIFICATION,
+            (ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL),
+        ),),
+    )
+    plan = build_execution_plan(
+        CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+        policy=policy,
+        registry=ProviderRegistry((REMOTE, LOCAL)),
+    )
+    assert plan.steps[0].provider_id == "local-model-a"
+    assert plan.steps[0].selection_reason == "CAPABILITY_POLICY_PREFERENCE"
+
+
+def test_unavailable_preferred_provider_can_fall_to_next_allowed_class():
+    unavailable_local = ProviderCapability(
+        "local-model-down", "1", ExecutionClass.LOCAL_MODEL,
+        frozenset({Capability.CLASSIFICATION}), DataEgress.NONE,
+        ProviderHealth.UNAVAILABLE,
+    )
+    policy = ExecutionPolicy(
+        "hybrid-fallback", "1",
+        frozenset({ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL}),
+        True, True,
+        (CapabilityExecutionPolicy(
+            Capability.CLASSIFICATION,
+            (ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL),
+        ),),
+    )
+    plan = build_execution_plan(
+        CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+        policy=policy,
+        registry=ProviderRegistry((unavailable_local, REMOTE)),
+    )
+    assert plan.steps[0].provider_id == "remote-model-a"
+
+
+def test_local_only_policy_still_fails_when_local_provider_unavailable():
+    unavailable_local = ProviderCapability(
+        "local-model-down", "1", ExecutionClass.LOCAL_MODEL,
+        frozenset({Capability.CLASSIFICATION}), DataEgress.NONE,
+        ProviderHealth.UNAVAILABLE,
+    )
+    with pytest.raises(ExecutionPlanningError, match="NO_ELIGIBLE_PROVIDER:CLASSIFICATION"):
+        build_execution_plan(
+            CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+            policy=ExecutionPolicy("local-only", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False, True),
+            registry=ProviderRegistry((unavailable_local, REMOTE)),
+        )
+
+
+def test_capability_preference_cannot_widen_allowed_execution_classes():
+    with pytest.raises(ValueError, match="CAPABILITY_PREFERENCE_NOT_ALLOWED"):
+        ExecutionPolicy(
+            "bad", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False, True,
+            (CapabilityExecutionPolicy(
+                Capability.CLASSIFICATION,
+                (ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL),
+            ),),
+        )
