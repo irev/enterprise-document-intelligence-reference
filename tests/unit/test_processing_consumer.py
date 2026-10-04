@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from edi_reference.adapters.processing_memory import InMemoryProcessingClaimRepository
-from edi_reference.application.processing_consumer import consume_processing_message
+from edi_reference.application.processing_consumer import consume_processing_message, renew_processing_lease
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
 from edi_reference.domain.lineage import SourceObservation
@@ -203,3 +203,63 @@ def test_processing_digest_is_resolved_from_observation_not_payload_reference():
         ids=Ids(),
     )
     assert result.observation_sha256 == "a" * 64
+
+
+def test_active_claim_lease_can_be_renewed_without_advancing_generation():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    claim = ProcessingClaim(
+        message_id="renew-msg", processing_run_id="renew-run",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=clock.now(), lease_until=clock.now() + timedelta(minutes=1),
+        claim_generation=3,
+    )
+    repo.save(claim)
+    renewed = renew_processing_lease(
+        claim, repository=repo, clock=clock, lease_seconds=300
+    )
+    assert renewed.claim_generation == 3
+    assert renewed.lease_until == clock.now() + timedelta(seconds=300)
+    assert repo.get("renew-msg") == renewed
+
+
+def test_expired_claim_lease_cannot_be_renewed():
+    import pytest
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    claim = ProcessingClaim(
+        message_id="expired-renew-msg", processing_run_id="renew-run",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=clock.now() - timedelta(minutes=10),
+        lease_until=clock.now() - timedelta(seconds=1), claim_generation=3,
+    )
+    repo.save(claim)
+    with pytest.raises(RuntimeError, match="CLAIM_LEASE_LOST"):
+        renew_processing_lease(claim, repository=repo, clock=clock)
+
+
+def test_stale_generation_cannot_renew_newer_claim():
+    import pytest
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    current = ProcessingClaim(
+        message_id="stale-renew-msg", processing_run_id="renew-run",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=clock.now(), lease_until=clock.now() + timedelta(minutes=5),
+        claim_generation=4,
+    )
+    repo.save(current)
+    stale = ProcessingClaim(
+        message_id=current.message_id, processing_run_id=current.processing_run_id,
+        tenant_id=current.tenant_id, application_id=current.application_id,
+        observation_sha256=current.observation_sha256,
+        status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=clock.now() - timedelta(minutes=10),
+        lease_until=clock.now() + timedelta(minutes=1), claim_generation=3,
+    )
+    with pytest.raises(RuntimeError, match="CLAIM_LEASE_LOST"):
+        renew_processing_lease(stale, repository=repo, clock=clock)
+    assert repo.get(current.message_id) == current
