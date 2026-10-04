@@ -11,6 +11,8 @@ from edi_reference.domain.classification import (
 )
 from edi_reference.domain.document_structure import StructuredDocument
 from edi_reference.domain.evidence import EvidenceReference
+from edi_reference.domain.taxonomy import DocumentTaxonomy
+from edi_reference.application.taxonomy import validate_candidates
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +45,15 @@ def classify_document(
     *,
     classifier: ClassifierAdapter,
     policy: ClassificationPolicy,
+    taxonomy: DocumentTaxonomy | None = None,
 ) -> ClassificationPrediction:
     raw = classifier.classify(document)
+    if taxonomy is not None:
+        validate_candidates(
+            raw.candidates,
+            taxonomy=taxonomy,
+            classifier_taxonomy_version=classifier.taxonomy_version,
+        )
     if not raw.candidates:
         return _unknown(classifier, raw.evidence)
 
