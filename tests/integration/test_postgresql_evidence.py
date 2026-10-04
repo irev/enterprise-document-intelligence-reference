@@ -17,6 +17,7 @@ def connect():
 
 
 def seed(cursor):
+    cursor.execute("DELETE FROM processing.evidence_reference WHERE result_id='evidence-result'")
     cursor.execute("DELETE FROM processing.processing_result WHERE result_id='evidence-result'")
     cursor.execute("DELETE FROM processing.processing_run WHERE processing_run_id='evidence-run'")
     cursor.execute("DELETE FROM ingestion.source_observation WHERE observation_id='evidence-observation'")
