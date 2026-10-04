@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from edi_reference.adapters.in_memory import InMemoryAcquisitionAudit, StaticApplicationAuthorizer
 from edi_reference.adapters.inbound_memory import InMemoryAtomicAcceptanceStore, InMemoryInboundRepository, InMemoryProcessingDispatcher
 from edi_reference.application.inbound import IdempotencyConflict, receive_document, request_fingerprint
+from edi_reference.application.acquire import AcquisitionEvent, AcquisitionOutcome
 from edi_reference.application.ports import AcquiredSource, ApplicationPrincipal
 from edi_reference.domain.ingestion import SourcePolicy
 from edi_reference.domain.integration import InteractionContext
@@ -198,3 +199,46 @@ def test_same_idempotency_key_with_different_source_is_conflict() -> None:
         )
     assert acquirer.calls == 1
     assert len(dispatcher.items) == 1
+
+
+def test_accepted_acquisition_requires_factual_observation_metadata(monkeypatch) -> None:
+    import pytest
+    import edi_reference.application.inbound as inbound_module
+
+    def incomplete_acquisition(**kwargs):
+        return AcquisitionEvent(
+            tenant_id="tenant-a",
+            application_id="app-a",
+            correlation_id="corr-1",
+            method="UPLOAD",
+            occurred_at=FixedClock().now(),
+            outcome=AcquisitionOutcome.ACQUIRED,
+            sha256="a" * 64,
+            byte_length=None,
+            media_type=None,
+        )
+
+    monkeypatch.setattr(inbound_module, "acquire_and_validate", incomplete_acquisition)
+    repository = InMemoryInboundRepository()
+    store = InMemoryAtomicAcceptanceStore(repository)
+
+    with pytest.raises(
+        ValueError, match="ACCEPTED_ACQUISITION_REQUIRES_OBSERVATION_METADATA"
+    ):
+        receive_document(
+            principal=ApplicationPrincipal("app-a"),
+            context=ctx("missing-observation-metadata"),
+            source=SourceReference(method=AcquisitionMethod.UPLOAD),
+            authorizer=StaticApplicationAuthorizer({("app-a", "tenant-a")}),
+            acquirer=StaticAcquirer(),
+            audit=InMemoryAcquisitionAudit(),
+            repository=repository,
+            dispatcher=None,
+            acceptance_store=store,
+            policy=SourcePolicy(1024, frozenset({"application/pdf"})),
+            clock=FixedClock(),
+            ids=SequentialIds(),
+        )
+
+    assert not store.observations
+    assert not store.outbox
