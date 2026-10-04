@@ -74,3 +74,32 @@ def test_stale_generation_cannot_complete_reclaimed_claim():
     )
     assert repo.save_if_generation(valid_completion, 2, now=now)
     assert repo.get("claim-message").status is ProcessingClaimStatus.COMPLETED
+
+
+def test_matching_generation_cannot_finalize_after_lease_expiry():
+    now = datetime.now(UTC)
+    repo = PostgreSqlProcessingClaimRepository(connect)
+    current = repo.get("claim-message")
+    assert current is not None
+
+    active = ProcessingClaim(
+        current.message_id, current.processing_run_id, current.tenant_id,
+        current.application_id, current.observation_sha256,
+        ProcessingClaimStatus.CLAIMED,
+        now - timedelta(minutes=10), now - timedelta(minutes=1),
+        current.claim_generation + 1,
+    )
+    repo.save(active)
+
+    late_completion = ProcessingClaim(
+        active.message_id, active.processing_run_id, active.tenant_id,
+        active.application_id, active.observation_sha256,
+        ProcessingClaimStatus.COMPLETED, active.claimed_at, active.lease_until,
+        active.claim_generation, completed_at=now,
+    )
+    assert repo.save_if_generation(
+        late_completion, active.claim_generation, now=now
+    ) is False
+    persisted = repo.get(active.message_id)
+    assert persisted.status is ProcessingClaimStatus.CLAIMED
+    assert persisted.claim_generation == active.claim_generation
