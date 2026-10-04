@@ -56,13 +56,13 @@ class PostgreSqlProcessingClaimRepository:
                          processing_run_id=%s, tenant_id=%s, application_id=%s,
                          observation_sha256=%s, status=%s, claimed_at=%s,
                          lease_until=%s, claim_generation=%s, completed_at=%s,
-                         failure_code=%s
+                         failure_code=%s, observation_id=%s
                        WHERE message_id=%s""",
                     (
                         claim.processing_run_id, claim.tenant_id, claim.application_id,
                         claim.observation_sha256, claim.status.value, claim.claimed_at,
                         claim.lease_until, claim.claim_generation, claim.completed_at,
-                        claim.failure_code, claim.message_id,
+                        claim.failure_code, claim.observation_id, claim.message_id,
                     ),
                 )
                 if cursor.rowcount != 1:
@@ -77,7 +77,7 @@ class PostgreSqlProcessingClaimRepository:
                          processing_run_id=%s, tenant_id=%s, application_id=%s,
                          observation_sha256=%s, status=%s, claimed_at=%s,
                          lease_until=%s, claim_generation=%s, completed_at=%s,
-                         failure_code=%s
+                         failure_code=%s, observation_id=%s
                        WHERE message_id=%s
                          AND claim_generation=%s
                          AND (
@@ -88,7 +88,7 @@ class PostgreSqlProcessingClaimRepository:
                         claim.processing_run_id, claim.tenant_id, claim.application_id,
                         claim.observation_sha256, claim.status.value, claim.claimed_at,
                         claim.lease_until, claim.claim_generation, claim.completed_at,
-                        claim.failure_code, claim.message_id, expected_generation, now,
+                        claim.failure_code, claim.observation_id, claim.message_id, expected_generation, now,
                     ),
                 )
                 return cursor.rowcount == 1
