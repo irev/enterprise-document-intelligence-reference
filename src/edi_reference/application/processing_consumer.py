@@ -37,7 +37,7 @@ class DocumentProcessor(Protocol):
     def process(self, claim: ProcessingClaim) -> None: ...
 
 
-class LeaseAwareDocumentProcessor(Protocol):
+class FinalizingDocumentProcessor(Protocol):\n    """Processor that atomically persists its result and terminal success."""\n\n    def process_and_finalize(self, claim: ProcessingClaim) -> None: ...\n\n\nclass LeaseAwareDocumentProcessor(Protocol):
     """Process one owned claim with explicit lease renewal.
 
     Expected document-level failures MUST raise ProcessingFailure. Unexpected
