@@ -22,12 +22,12 @@ class ProcessingProfileRegistry:
 
         self._bindings: dict[tuple[str, str | None], ProcessingProfileBinding] = {}
         for binding in bindings:
-            key = (binding.tenant_id, binding.application_id)
-            if key in self._bindings:
+            binding_key = (binding.tenant_id, binding.application_id)
+            if binding_key in self._bindings:
                 raise ProcessingProfileError("DUPLICATE_PROCESSING_PROFILE_BINDING")
             if (binding.profile_id, binding.profile_version) not in self._profiles:
                 raise ProcessingProfileError("PROCESSING_PROFILE_NOT_FOUND")
-            self._bindings[key] = binding
+            self._bindings[binding_key] = binding
 
     def resolve(self, *, tenant_id: str, application_id: str) -> ProcessingProfile:
         binding = self._bindings.get((tenant_id, application_id))
