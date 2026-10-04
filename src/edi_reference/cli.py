@@ -10,7 +10,9 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from edi_reference.application.paddle_models import verify_paddle_model, warm_paddle_model
 from edi_reference.application.provider_manifest import load_provider_manifest
+from edi_reference.application.runtime_installer import runtime_python
 from edi_reference.application.runtime_management import RuntimeManagementService
 
 
@@ -90,6 +92,16 @@ def _parser() -> argparse.ArgumentParser:
     models = commands.add_parser("models")
     model_commands = models.add_subparsers(dest="model_command", required=True)
     model_commands.add_parser("list")
+    model_pull = model_commands.add_parser("pull")
+    model_pull.add_argument("model_id")
+    model_pull.add_argument("--profile", default="cpu")
+    model_pull.add_argument("--source", choices=("HUGGINGFACE", "BOS"), default="HUGGINGFACE")
+    model_pull.add_argument("--yes", action="store_true")
+    model_pull.add_argument("--runtime-root", type=Path, default=Path(".edi/runtimes"))
+    model_pull.add_argument("--model-root", type=Path, default=Path(".edi/models"))
+    model_verify = model_commands.add_parser("verify")
+    model_verify.add_argument("model_id")
+    model_verify.add_argument("--model-root", type=Path, default=Path(".edi/models"))
 
     install = commands.add_parser("install")
     install.add_argument("--provider", required=True)
@@ -119,8 +131,37 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "models":
-        for model in service.models():
-            print(f"{model['provider_id']}: {model['model_id']}")
+        if args.model_command == "list":
+            for model in service.models():
+                print(f"{model['provider_id']}: {model['model_id']}")
+            return 0
+        artifact_dir = args.model_root / "paddle-ocr" / args.model_id
+        if args.model_command == "verify":
+            try:
+                state = verify_paddle_model(artifact_dir)
+            except (ValueError, OSError, json.JSONDecodeError) as exc:
+                print(str(exc))
+                return 2
+            print(json.dumps(asdict(state), indent=2))
+            return 0
+        if not args.yes:
+            print("MODEL_PULL_CONFIRMATION_REQUIRED_USE_YES")
+            return 2
+        python_executable = runtime_python(args.runtime_root / "paddle-ocr" / args.profile)
+        if not python_executable.is_file():
+            print("PADDLE_RUNTIME_NOT_INSTALLED")
+            return 2
+        try:
+            state = warm_paddle_model(
+                python_executable=str(python_executable),
+                model_id=args.model_id,
+                artifact_dir=artifact_dir,
+                source=args.source,
+            )
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            print(str(exc))
+            return 2
+        print(json.dumps(asdict(state), indent=2))
         return 0
 
     if args.command == "install":
