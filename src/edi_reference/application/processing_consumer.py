@@ -76,7 +76,7 @@ def consume_processing_message(
     message: OutboxMessage,
     *,
     repository: ProcessingClaimRepository,
-    processor: DocumentProcessor | LeaseAwareDocumentProcessor,
+    processor: DocumentProcessor | LeaseAwareDocumentProcessor | FinalizingDocumentProcessor,
     observations: ObservationRepository,
     clock: Clock,
     ids: IdGenerator,
