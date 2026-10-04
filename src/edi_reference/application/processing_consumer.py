@@ -28,10 +28,22 @@ class ProcessingFailure(Exception):
 
 
 class DocumentProcessor(Protocol):
+    """Process one owned claim.
+
+    Expected document-level failures MUST raise ProcessingFailure. Unexpected
+    implementation defects and ownership/control failures MUST propagate.
+    """
+
     def process(self, claim: ProcessingClaim) -> None: ...
 
 
 class LeaseAwareDocumentProcessor(Protocol):
+    """Process one owned claim with explicit lease renewal.
+
+    Expected document-level failures MUST raise ProcessingFailure. Unexpected
+    implementation defects and ownership/control failures MUST propagate.
+    """
+
     def process(
         self,
         claim: ProcessingClaim,
