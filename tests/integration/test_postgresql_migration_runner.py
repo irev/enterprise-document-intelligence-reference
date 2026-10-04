@@ -1,6 +1,6 @@
 import os
+from pathlib import Path
 
-import psycopg
 import pytest
 
 from scripts.apply_migrations import apply_migrations
@@ -11,8 +11,10 @@ pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not confi
 
 
 def test_migration_runner_is_rerunnable_and_records_checksums():
-    apply_migrations(DSN, __import__("pathlib").Path("migrations"))
-    apply_migrations(DSN, __import__("pathlib").Path("migrations"))
+    import psycopg
+
+    apply_migrations(DSN, Path("migrations"))
+    apply_migrations(DSN, Path("migrations"))
 
     with psycopg.connect(DSN) as connection:
         with connection.cursor() as cursor:
