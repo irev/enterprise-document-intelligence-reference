@@ -41,3 +41,25 @@ class BadAdapter(ProviderAdapter):
 def test_adapter_that_accepts_unsupported_capability_fails_conformance():
     with pytest.raises(ValueError, match="PROVIDER_ADAPTER_NONCONFORMANT"):
         assert_provider_adapter_conformant(BadAdapter())
+
+
+def test_remote_provider_must_declare_external_egress():
+    with pytest.raises(ValueError, match="REMOTE_PROVIDER_MUST_DECLARE_EXTERNAL_EGRESS"):
+        ProviderDescriptor(
+            ProviderCapability(
+                "remote-test", "1", ExecutionClass.REMOTE_MODEL,
+                frozenset({Capability.CLASSIFICATION}), DataEgress.NONE,
+            ),
+            "remote-adapter", "1",
+        )
+
+
+def test_local_provider_cannot_declare_external_egress():
+    with pytest.raises(ValueError, match="NON_REMOTE_PROVIDER_CANNOT_DECLARE_EXTERNAL_EGRESS"):
+        ProviderDescriptor(
+            ProviderCapability(
+                "local-test", "1", ExecutionClass.LOCAL_MODEL,
+                frozenset({Capability.CLASSIFICATION}), DataEgress.APPROVED_EXTERNAL,
+            ),
+            "local-adapter", "1",
+        )
