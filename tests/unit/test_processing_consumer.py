@@ -4,6 +4,7 @@ from edi_reference.adapters.processing_memory import InMemoryProcessingClaimRepo
 from edi_reference.application.processing_consumer import consume_processing_message
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
+from edi_reference.domain.lineage import ScopedObservation
 
 
 class Clock:
@@ -21,6 +22,17 @@ class Ids:
     def new_id(self):
         self.n += 1
         return f"run-{self.n}"
+
+
+class Observations:
+    def __init__(self, item=None):
+        self.item = item or ScopedObservation(
+            "obs-1", "inbound-1", "tenant-a", "app-a", "a" * 64,
+            100, "application/pdf", Clock().now(),
+        )
+
+    def get(self, observation_id):
+        return self.item if self.item.observation_id == observation_id else None
 
 
 class Processor:
@@ -50,8 +62,8 @@ def message():
 
 def test_redelivery_after_completion_is_deduplicated():
     repo, processor, clock, ids = InMemoryProcessingClaimRepository(), Processor(), Clock(), Ids()
-    first = consume_processing_message(message(), repository=repo, processor=processor, clock=clock, ids=ids)
-    second = consume_processing_message(message(), repository=repo, processor=processor, clock=clock, ids=ids)
+    first = consume_processing_message(message(), repository=repo, processor=processor, observations=Observations(), clock=clock, ids=ids)
+    second = consume_processing_message(message(), repository=repo, processor=processor, observations=Observations(), clock=clock, ids=ids)
     assert first.status is ProcessingClaimStatus.COMPLETED
     assert second == first
     assert processor.calls == 1
@@ -67,7 +79,7 @@ def test_active_lease_prevents_concurrent_processing():
         claimed_at=clock.now(), lease_until=clock.now() + timedelta(minutes=5),
     ))
     processor = Processor()
-    result = consume_processing_message(message(), repository=repo, processor=processor, clock=clock, ids=Ids())
+    result = consume_processing_message(message(), repository=repo, processor=processor, observations=Observations(), clock=clock, ids=Ids())
     assert result.processing_run_id == "run-existing"
     assert processor.calls == 0
 
@@ -82,7 +94,7 @@ def test_expired_lease_can_be_reclaimed_without_new_run_identity():
         claimed_at=clock.now() - timedelta(minutes=10), lease_until=clock.now() - timedelta(minutes=5),
     ))
     processor = Processor()
-    result = consume_processing_message(message(), repository=repo, processor=processor, clock=clock, ids=Ids())
+    result = consume_processing_message(message(), repository=repo, processor=processor, observations=Observations(), clock=clock, ids=Ids())
     assert result.status is ProcessingClaimStatus.COMPLETED
     assert result.processing_run_id == "run-existing"
     assert processor.calls == 1
@@ -90,7 +102,7 @@ def test_expired_lease_can_be_reclaimed_without_new_run_identity():
 
 def test_failure_stores_stable_code_not_exception_detail():
     repo, processor = InMemoryProcessingClaimRepository(), Processor(fail=True)
-    result = consume_processing_message(message(), repository=repo, processor=processor, clock=Clock(), ids=Ids())
+    result = consume_processing_message(message(), repository=repo, processor=processor, observations=Observations(), clock=Clock(), ids=Ids())
     assert result.status is ProcessingClaimStatus.FAILED
     assert result.failure_code == "PROCESSING_FAILED"
 
@@ -106,7 +118,7 @@ def test_reclaim_advances_generation():
         lease_until=clock.now() - timedelta(minutes=5),
         claim_generation=7,
     ))
-    result = consume_processing_message(message(), repository=repo, processor=Processor(), clock=clock, ids=Ids())
+    result = consume_processing_message(message(), repository=repo, processor=Processor(), observations=Observations(), clock=clock, ids=Ids())
     assert result.status is ProcessingClaimStatus.COMPLETED
     assert result.claim_generation == 8
 
@@ -151,6 +163,7 @@ def test_processing_requires_observation_identity():
             without_observation,
             repository=InMemoryProcessingClaimRepository(),
             processor=Processor(),
+            observations=Observations(),
             clock=Clock(),
             ids=Ids(),
         )
@@ -161,7 +174,32 @@ def test_processing_claim_carries_observation_identity():
         message(),
         repository=InMemoryProcessingClaimRepository(),
         processor=Processor(),
+        observations=Observations(),
         clock=Clock(),
         ids=Ids(),
     )
     assert result.observation_id == "obs-1"
+
+
+def test_processing_digest_is_resolved_from_observation_not_payload_reference():
+    msg = message()
+    misleading_payload = OutboxMessage(
+        message_id=msg.message_id,
+        tenant_id=msg.tenant_id,
+        application_id=msg.application_id,
+        correlation_id=msg.correlation_id,
+        aggregate_id=msg.aggregate_id,
+        message_type=msg.message_type,
+        payload_ref="sha256:" + "f" * 64,
+        created_at=msg.created_at,
+        observation_id=msg.observation_id,
+    )
+    result = consume_processing_message(
+        misleading_payload,
+        repository=InMemoryProcessingClaimRepository(),
+        processor=Processor(),
+        observations=Observations(),
+        clock=Clock(),
+        ids=Ids(),
+    )
+    assert result.observation_sha256 == "a" * 64
