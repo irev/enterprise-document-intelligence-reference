@@ -86,24 +86,24 @@ python -m pytest
 
 PostgreSQL integration tests are conditional. If `EDI_TEST_POSTGRES_DSN` is not set, those tests are **skipped**; a default-suite success therefore does not by itself prove the durable PostgreSQL layer.
 
-To run the PostgreSQL layer, install the adapter, point `EDI_TEST_POSTGRES_DSN` at a disposable test database, apply the migrations in order, then run the integration suite. For example, using the same database settings as CI:
+To run the PostgreSQL layer, install the adapter, point `EDI_TEST_POSTGRES_DSN` at a disposable test database, apply migrations through the versioned runner, then run the integration suite:
 
 ```bash
 python -m pip install -e ".[dev,postgres]"
 export EDI_TEST_POSTGRES_DSN="postgresql://edi:edi@localhost:5432/edi_test"
-export PGPASSWORD="edi"
 
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0001_control_plane.sql
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0002_inbound_outbox.sql
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0003_source_lineage.sql
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0004_processing_claim.sql
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0005_observation_dispatch.sql
-psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0006_lineage_referential_integrity.sql
-
+python scripts/apply_migrations.py --dsn "$EDI_TEST_POSTGRES_DSN"
 python -m pytest tests/integration -vv
 ```
 
-On Windows PowerShell, set the environment variables with `$env:EDI_TEST_POSTGRES_DSN = "postgresql://edi:edi@localhost:5432/edi_test"` and `$env:PGPASSWORD = "edi"`; the migration and pytest commands are otherwise the same when `psql` is available on `PATH`.
+The migration runner discovers ordered `NNNN_*.sql` files automatically and records their filename and SHA-256 in `control_plane.schema_migration`. Applied versions are skipped on rerun; changing an already-applied migration fails checksum verification instead of silently accepting schema drift.
+
+On Windows PowerShell, set `$env:EDI_TEST_POSTGRES_DSN = "postgresql://edi:edi@localhost:5432/edi_test"`, then run:
+
+```powershell
+python scripts/apply_migrations.py --dsn $env:EDI_TEST_POSTGRES_DSN
+python -m pytest tests/integration -vv
+```
 
 See `AGENTS.md` before making architecture or contract changes.
 
