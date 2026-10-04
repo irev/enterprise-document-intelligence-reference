@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from edi_reference.application.paddle_install import InstallStep
-from edi_reference.application.runtime_installer import execute_steps, runtime_python
+from edi_reference.application.runtime_installer import InstallStepFailed, execute_steps, runtime_python
 
 
 def test_runtime_python_is_inside_runtime_directory(tmp_path: Path) -> None:
@@ -29,5 +29,9 @@ def test_execute_steps_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     run = Mock(return_value=Mock(returncode=1, stdout="", stderr="failure"))
     monkeypatch.setattr("subprocess.run", run)
 
-    with pytest.raises(RuntimeError, match="INSTALL_STEP_FAILED:install"):
+    with pytest.raises(InstallStepFailed, match="INSTALL_STEP_FAILED:install") as failure:
         execute_steps((InstallStep("install", ("python", "-m", "pip")),))
+
+    assert failure.value.results[0].name == "install"
+    assert failure.value.results[0].returncode == 1
+    assert not hasattr(failure.value.results[0], "stderr")
