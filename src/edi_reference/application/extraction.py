@@ -4,7 +4,7 @@ from typing import Protocol
 
 from edi_reference.application.evidence import validate_evidence
 from edi_reference.domain.document_structure import StructuredDocument
-from edi_reference.domain.extraction import ExtractedField, FieldState
+from edi_reference.domain.extraction import ExtractedField
 
 
 class ExtractorAdapter(Protocol):
@@ -36,8 +36,4 @@ def extract_fields(
 
         for evidence in field.evidence:
             validate_evidence(document, evidence)
-
-        if field.state is FieldState.INVALID and not field.evidence:
-            raise ValueError("INVALID_FIELD_REQUIRES_EVIDENCE")
-
     return fields
