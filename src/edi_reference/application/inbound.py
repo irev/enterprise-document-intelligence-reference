@@ -14,6 +14,7 @@ from edi_reference.application.ports import (
 )
 from edi_reference.domain.inbound import InboundRecord, InboundStatus, ProcessingDispatch
 from edi_reference.domain.outbox import OutboxMessage
+from edi_reference.domain.lineage import ScopedObservation
 from edi_reference.domain.ingestion import Clock, IdGenerator, SourcePolicy
 from edi_reference.domain.integration import InteractionContext
 from edi_reference.domain.source import SourceReference
@@ -46,9 +47,11 @@ class ProcessingDispatcher(Protocol):
 
 
 class InboundAcceptanceStore(Protocol):
-    """Atomically persist ACCEPTED inbound state and its processing outbox message."""
+    """Atomically persist accepted inbound state, observation, and processing outbox."""
 
-    def accept_and_enqueue(self, record: InboundRecord, message: OutboxMessage) -> None: ...
+    def accept_and_enqueue(
+        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+    ) -> None: ...
 
 
 def receive_document(
@@ -123,8 +126,20 @@ def receive_document(
     )
     if final.status is InboundStatus.ACCEPTED and final.observation_sha256:
         if acceptance_store is not None:
+            observation = ScopedObservation(
+                observation_id=ids.new_id(),
+                document_id=final.inbound_id,
+                tenant_id=final.tenant_id,
+                application_id=final.application_id,
+                sha256=final.observation_sha256.lower(),
+                byte_length=event.byte_length or 0,
+                detected_media_type=event.media_type or "application/octet-stream",
+                observed_at=event.occurred_at,
+                external_version=event.external_version,
+            )
             acceptance_store.accept_and_enqueue(
                 final,
+                observation,
                 OutboxMessage(
                     message_id=ids.new_id(),
                     tenant_id=final.tenant_id,
@@ -134,6 +149,7 @@ def receive_document(
                     message_type="PROCESS_DOCUMENT",
                     payload_ref="sha256:" + final.observation_sha256,
                     created_at=clock.now(),
+                    observation_id=observation.observation_id,
                 ),
             )
         else:
