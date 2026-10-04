@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import asdict
+from typing import Any
 
 from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
@@ -38,7 +39,7 @@ class RuntimeManagementService:
         *,
         provider_id: str,
         profile: str,
-        host: object,
+        host: Any,
         python_executable: str = sys.executable,
     ) -> dict[str, object]:
         definition = self._manifest.providers.get(provider_id)
