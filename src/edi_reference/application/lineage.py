@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from edi_reference.domain.ingestion import Clock, IdGenerator
-from edi_reference.domain.lineage import ProcessingRunBinding, RefetchOutcome, ScopedObservation
+from edi_reference.domain.lineage import ProcessingRunBinding, RefetchOutcome, SourceObservation
 from edi_reference.domain.source import SourceChangedError
 
 
@@ -12,11 +12,11 @@ class ObservationAccessDenied(PermissionError):
 
 
 class ObservationRepository(Protocol):
-    def get(self, observation_id: str) -> ScopedObservation | None: ...
-    def save(self, observation: ScopedObservation) -> None: ...
+    def get(self, observation_id: str) -> SourceObservation | None: ...
+    def save(self, observation: SourceObservation) -> None: ...
     def find_by_scope_document_digest(
         self, tenant_id: str, application_id: str, document_id: str, sha256: str
-    ) -> ScopedObservation | None: ...
+    ) -> SourceObservation | None: ...
 
 
 class ProcessingRunRepository(Protocol):
@@ -24,14 +24,14 @@ class ProcessingRunRepository(Protocol):
 
 
 def require_observation_scope(
-    observation: ScopedObservation, *, tenant_id: str, application_id: str
+    observation: SourceObservation, *, tenant_id: str, application_id: str
 ) -> None:
     if observation.tenant_id != tenant_id or observation.application_id != application_id:
         raise ObservationAccessDenied("OBSERVATION_ACCESS_DENIED")
 
 
 def bind_processing_run(
-    observation: ScopedObservation,
+    observation: SourceObservation,
     *,
     tenant_id: str,
     application_id: str,
@@ -54,7 +54,7 @@ def bind_processing_run(
 
 
 def verify_reprocess_observation(
-    observation: ScopedObservation,
+    observation: SourceObservation,
     *,
     tenant_id: str,
     application_id: str,
@@ -66,7 +66,7 @@ def verify_reprocess_observation(
 
 
 def register_refetch(
-    current: ScopedObservation,
+    current: SourceObservation,
     *,
     tenant_id: str,
     application_id: str,
@@ -77,7 +77,7 @@ def register_refetch(
     repository: ObservationRepository,
     clock: Clock,
     ids: IdGenerator,
-) -> tuple[RefetchOutcome, ScopedObservation]:
+) -> tuple[RefetchOutcome, SourceObservation]:
     require_observation_scope(current, tenant_id=tenant_id, application_id=application_id)
     if current.sha256.lower() == sha256.lower():
         return RefetchOutcome.UNCHANGED, current
@@ -88,7 +88,7 @@ def register_refetch(
     if existing is not None:
         return RefetchOutcome.CHANGED, existing
 
-    observation = ScopedObservation(
+    observation = SourceObservation(
         observation_id=ids.new_id(),
         document_id=current.document_id,
         tenant_id=tenant_id,
