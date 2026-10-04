@@ -13,6 +13,10 @@ ALTER TABLE ingestion.source_observation
     UNIQUE (observation_id, document_id, tenant_id, application_id);
 
 ALTER TABLE ingestion.source_observation
+    ADD CONSTRAINT source_observation_identity_scope_unique
+    UNIQUE (observation_id, tenant_id, application_id);
+
+ALTER TABLE ingestion.source_observation
     ADD CONSTRAINT source_observation_scope_digest_unique
     UNIQUE (observation_id, document_id, tenant_id, application_id, sha256);
 
