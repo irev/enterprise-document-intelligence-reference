@@ -10,7 +10,7 @@ This repository demonstrates one possible implementation of the specification. I
 
 ## Runtime
 
-- Python 3.12+
+- Python 3.12 is the validated development/typecheck baseline
 - Standard library first
 - External dependencies are introduced only when a concrete capability requires them
 
@@ -69,7 +69,12 @@ This repository MUST NOT contain confidential corporate blueprints, source docum
 
 Private material may inform validation privately. Only generalized, sanitized, non-identifying implementation requirements or test cases may be committed.
 
-## Installation\n\nUse [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Do not install ML provider dependencies into the core development environment.\n\n## Development\n
+## Installation
+
+Use [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Do not install ML provider dependencies into the core development environment.
+
+## Development
+
 Use an activated project virtual environment for development commands.
 
 The default suite installs development dependencies and runs the tests that do not require a live PostgreSQL DSN:
@@ -99,6 +104,22 @@ On Windows PowerShell, set `$env:EDI_TEST_POSTGRES_DSN = "postgresql://edi:edi@l
 python scripts/apply_migrations.py --dsn $env:EDI_TEST_POSTGRES_DSN
 python -m pytest tests/integration -vv
 ```
+
+## Windows mypy / `librt.base64` troubleshooting
+
+Development and CI typechecking use **Python 3.12**. Run mypy through the active project interpreter:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+python --version
+python -m mypy src/edi_reference
+```
+
+If Windows reports an import/module error involving `librt.base64`, treat it first as a **mypy toolchain/environment problem**, not an EDI application dependency. Confirm that `python -m mypy` is using the project Python 3.12 virtual environment. Do **not** add `librt` to the core/runtime dependencies merely to make mypy start.
+
+A machine-wide/default Python (for example a newer Python release) may resolve a different mypy/native dependency set than the validated project environment. Recreate the project `.venv` with Python 3.12 before investigating EDI source typing. See `INSTALLATION.md` for the full diagnostic procedure.
 
 See `AGENTS.md` before making architecture or contract changes.
 
