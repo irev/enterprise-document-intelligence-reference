@@ -62,7 +62,7 @@ def seed(cursor, *, generation=1, lease_minutes=5):
         """INSERT INTO integration.outbox_message
            (message_id,tenant_id,application_id,correlation_id,aggregate_id,
             message_type,payload_ref,created_at,observation_id)
-           VALUES ('final-message','final-tenant','final-app','corr','aggregate',
+           VALUES ('final-message','final-tenant','final-app','corr','final-document',
                    'PROCESS_DOCUMENT',%s,%s,'final-observation')""",
         ("sha256:" + "a" * 64, now),
     )
