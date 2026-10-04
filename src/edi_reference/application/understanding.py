@@ -38,7 +38,7 @@ def understand_document(
         pages = parser.parse(content, policy=policy)
     except ParserError:
         raise
-    except Exception as exc:
+    except Exception:
         raise ParserError(UnderstandingFailureCode.PARSER_FAILED) from None
 
     if len(pages) > policy.max_pages:
