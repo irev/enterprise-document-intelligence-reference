@@ -1,14 +1,10 @@
 import os
-from datetime import UTC, datetime
-
 import pytest
 
 from edi_reference.adapters.postgresql_extraction import PostgreSqlExtractedFieldRepository
-from edi_reference.domain.classification import ClassificationPrediction
 from edi_reference.domain.evidence import EvidenceKind, EvidenceReference
 from edi_reference.domain.extraction import ExtractedField, FieldState
 from edi_reference.domain.normalization import NormalizedField, NormalizedValue
-from edi_reference.domain.processing_result import ProcessingResult
 
 DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
 pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not configured")
