@@ -416,3 +416,73 @@ def test_terminal_claims_cannot_renew_lease_in_memory():
             lease_until=clock.now() + timedelta(minutes=10),
         ) is False
         assert repo.get(claim.message_id) == claim
+
+
+class AtomicFinalizingProcessor:
+    def __init__(self, repository, clock):
+        self.repository = repository
+        self.clock = clock
+        self.calls = 0
+
+    def process_and_finalize(self, claim):
+        self.calls += 1
+        completed = ProcessingClaim(
+            message_id=claim.message_id,
+            processing_run_id=claim.processing_run_id,
+            tenant_id=claim.tenant_id,
+            application_id=claim.application_id,
+            observation_sha256=claim.observation_sha256,
+            status=ProcessingClaimStatus.COMPLETED,
+            claimed_at=claim.claimed_at,
+            lease_until=claim.lease_until,
+            claim_generation=claim.claim_generation,
+            completed_at=self.clock.now(),
+            observation_id=claim.observation_id,
+        )
+        assert self.repository.save_if_generation(
+            completed, claim.claim_generation, now=self.clock.now()
+        )
+
+
+def test_atomic_finalizing_processor_owns_success_transition():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    processor = AtomicFinalizingProcessor(repo, clock)
+
+    result = consume_processing_message(
+        message(),
+        repository=repo,
+        processor=processor,
+        observations=Observations(),
+        clock=clock,
+        ids=Ids(),
+        processor_finalizes_success=True,
+    )
+
+    assert processor.calls == 1
+    assert result.status is ProcessingClaimStatus.COMPLETED
+
+
+class NonFinalizingProcessor:
+    def process_and_finalize(self, claim):
+        pass
+
+
+def test_atomic_finalizing_processor_must_commit_terminal_success():
+    import pytest
+
+    repo = InMemoryProcessingClaimRepository()
+    with pytest.raises(RuntimeError, match="PROCESSOR_FINALIZATION_NOT_COMMITTED"):
+        consume_processing_message(
+            message(),
+            repository=repo,
+            processor=NonFinalizingProcessor(),
+            observations=Observations(),
+            clock=Clock(),
+            ids=Ids(),
+            processor_finalizes_success=True,
+        )
+
+    persisted = repo.get(message().message_id)
+    assert persisted is not None
+    assert persisted.status is ProcessingClaimStatus.CLAIMED
