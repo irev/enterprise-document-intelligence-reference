@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from datetime import timedelta
-from typing import Protocol
+from typing import Callable, Protocol
 
 from edi_reference.domain.ingestion import Clock, IdGenerator
 from edi_reference.domain.outbox import OutboxMessage
@@ -23,12 +23,20 @@ class ObservationRepository(Protocol):
     def get(self, observation_id: str) -> SourceObservation | None: ...
 
 
+class ProcessingFailure(Exception):
+    """Expected document-processing failure safe to persist as PROCESSING_FAILED."""
+
+
 class DocumentProcessor(Protocol):
     def process(self, claim: ProcessingClaim) -> None: ...
 
 
 class LeaseAwareDocumentProcessor(Protocol):
-    def process(self, claim: ProcessingClaim, renew_lease) -> None: ...
+    def process(
+        self,
+        claim: ProcessingClaim,
+        renew_lease: Callable[[], ProcessingClaim],
+    ) -> None: ...
 
 
 def renew_processing_lease(
@@ -56,7 +64,7 @@ def consume_processing_message(
     message: OutboxMessage,
     *,
     repository: ProcessingClaimRepository,
-    processor: DocumentProcessor,
+    processor: DocumentProcessor | LeaseAwareDocumentProcessor,
     observations: ObservationRepository,
     clock: Clock,
     ids: IdGenerator,
@@ -127,7 +135,7 @@ def consume_processing_message(
             claim = active_claim
         else:
             processor.process(claim)
-    except Exception:
+    except ProcessingFailure:
         failed = replace(
             claim,
             status=ProcessingClaimStatus.FAILED,
