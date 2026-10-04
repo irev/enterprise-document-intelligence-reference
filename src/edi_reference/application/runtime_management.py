@@ -89,7 +89,7 @@ class RuntimeManagementService:
             raise ValueError("INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER")
         runtime_dir = runtime_root / provider_id / profile
         python_executable = str(ensure_runtime_venv(runtime_dir))
-        plan = self.plan_install(
+        self.plan_install(
             provider_id=provider_id,
             profile=profile,
             host=host,
