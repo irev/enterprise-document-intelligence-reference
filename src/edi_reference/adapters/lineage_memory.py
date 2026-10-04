@@ -2,22 +2,22 @@
 
 from dataclasses import dataclass, field
 
-from edi_reference.domain.lineage import ProcessingRunBinding, ScopedObservation
+from edi_reference.domain.lineage import ProcessingRunBinding, SourceObservation
 
 
 @dataclass
 class InMemoryObservationRepository:
-    observations: dict[str, ScopedObservation] = field(default_factory=dict)
+    observations: dict[str, SourceObservation] = field(default_factory=dict)
 
-    def get(self, observation_id: str) -> ScopedObservation | None:
+    def get(self, observation_id: str) -> SourceObservation | None:
         return self.observations.get(observation_id)
 
-    def save(self, observation: ScopedObservation) -> None:
+    def save(self, observation: SourceObservation) -> None:
         self.observations[observation.observation_id] = observation
 
     def find_by_scope_document_digest(
         self, tenant_id: str, application_id: str, document_id: str, sha256: str
-    ) -> ScopedObservation | None:
+    ) -> SourceObservation | None:
         return next(
             (
                 item
