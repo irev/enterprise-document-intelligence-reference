@@ -28,6 +28,9 @@ postgres = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/edi_reference"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"deploy/runtime-profiles/providers.toml" = "edi_reference/runtime/providers.toml"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
