@@ -19,7 +19,7 @@ class PostgreSqlProcessingClaimRepository:
             application_id=row[3], observation_sha256=row[4],
             status=ProcessingClaimStatus(row[5]), claimed_at=row[6],
             lease_until=row[7], claim_generation=row[8], completed_at=row[9],
-            failure_code=row[10],
+            failure_code=row[10], observation_id=row[11],
         )
 
     def get(self, message_id: str) -> ProcessingClaim | None:
@@ -28,7 +28,7 @@ class PostgreSqlProcessingClaimRepository:
                 cursor.execute(
                     """SELECT message_id, processing_run_id, tenant_id, application_id,
                               observation_sha256, status, claimed_at, lease_until,
-                              claim_generation, completed_at, failure_code
+                              claim_generation, completed_at, failure_code, observation_id
                        FROM processing.processing_claim WHERE message_id=%s""",
                     (message_id,),
                 )
@@ -41,8 +41,8 @@ class PostgreSqlProcessingClaimRepository:
                     """INSERT INTO processing.processing_claim
                        (message_id, processing_run_id, tenant_id, application_id,
                         observation_sha256, status, claimed_at, lease_until,
-                        claim_generation, completed_at, failure_code)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        claim_generation, completed_at, failure_code, observation_id)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                        ON CONFLICT (message_id) DO NOTHING""",
                     self._params(claim),
                 )
@@ -118,5 +118,5 @@ class PostgreSqlProcessingClaimRepository:
             claim.message_id, claim.processing_run_id, claim.tenant_id,
             claim.application_id, claim.observation_sha256, claim.status.value,
             claim.claimed_at, claim.lease_until, claim.claim_generation,
-            claim.completed_at, claim.failure_code,
+            claim.completed_at, claim.failure_code, claim.observation_id,
         )
