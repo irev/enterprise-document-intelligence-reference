@@ -150,3 +150,43 @@ def test_postgresql_lease_renewal_rejects_stale_generation_and_expired_lease():
         active.message_id, active.claim_generation,
         now=after_expiry, lease_until=after_expiry + timedelta(minutes=5),
     ) is False
+
+
+
+@pytest.mark.parametrize(
+    ("message_id", "status"),
+    [
+        ("terminal-completed-renew", ProcessingClaimStatus.COMPLETED),
+        ("terminal-failed-renew", ProcessingClaimStatus.FAILED),
+    ],
+)
+def test_postgresql_terminal_claim_cannot_renew_lease(message_id, status):
+    now = datetime.now(UTC)
+    repo = PostgreSqlProcessingClaimRepository(connect)
+    claim = ProcessingClaim(
+        message_id, f"run-{message_id}", "claim-tenant", "claim-app", "b" * 64,
+        status, now, now + timedelta(minutes=5), 1,
+        completed_at=now if status is ProcessingClaimStatus.COMPLETED else None,
+        failure_code="PROCESSING_FAILED" if status is ProcessingClaimStatus.FAILED else None,
+    )
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM processing.processing_claim WHERE message_id = %s",
+                (message_id,),
+            )
+            cursor.execute(
+                """INSERT INTO integration.outbox_message
+                   (message_id, tenant_id, application_id, correlation_id, aggregate_id,
+                    message_type, payload_ref, created_at)
+                   VALUES (%s,'claim-tenant','claim-app','corr','claim-inbound',
+                           'PROCESS_DOCUMENT',%s,%s)
+                   ON CONFLICT (message_id) DO NOTHING""",
+                (message_id, "sha256:" + "b" * 64, now),
+            )
+    assert repo.try_create(claim)
+    assert repo.try_renew_lease(
+        message_id, claim.claim_generation,
+        now=now, lease_until=now + timedelta(minutes=10),
+    ) is False
+    assert repo.get(message_id) == claim
