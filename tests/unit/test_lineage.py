@@ -9,7 +9,7 @@ from edi_reference.application.lineage import (
     register_refetch,
     verify_reprocess_observation,
 )
-from edi_reference.domain.lineage import RefetchOutcome, ScopedObservation
+from edi_reference.domain.lineage import RefetchOutcome, SourceObservation
 from edi_reference.domain.source import SourceChangedError
 
 
@@ -27,7 +27,7 @@ class Ids:
 
 
 def observation(sha="a" * 64):
-    return ScopedObservation(
+    return SourceObservation(
         observation_id="obs-1", document_id="doc-1", tenant_id="tenant-a",
         application_id="app-a", sha256=sha, byte_length=10,
         detected_media_type="application/pdf", observed_at=Clock().now(),
@@ -93,7 +93,7 @@ def test_refetch_digest_lookup_is_scoped_before_match():
     repo = InMemoryObservationRepository()
     current = observation()
     repo.save(current)
-    repo.save(ScopedObservation(
+    repo.save(SourceObservation(
         observation_id="obs-other", document_id="doc-1", tenant_id="tenant-b",
         application_id="app-a", sha256="b" * 64, byte_length=11,
         detected_media_type="application/pdf", observed_at=Clock().now(),
