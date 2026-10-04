@@ -34,6 +34,14 @@ File extension is not trusted as media evidence.
 - Tenant/application/correlation context travels with the submission but does not determine source validity.
 - No business authorization occurs during ingestion.
 
+## External source ownership
+
+RI-1 does not require permanent storage of original document binaries. The source system may remain the system of record.
+
+Durable lineage is `SourceReference -> SourceAcquisition -> SourceObservation -> ProcessingRun -> Result`. A SourceObservation records the exact observed content identity and metadata, not necessarily a retained binary.
+
+`REPROCESS` targets the same observation; reacquired bytes must match its SHA-256 or fail with `SOURCE_CHANGED`. `REFETCH` observes the current source. `REFETCH_AND_REPROCESS` explicitly permits a newly observed revision and starts a new processing run.
+
 ## Deliberately deferred
 
 RI-1 does not yet implement:
@@ -41,7 +49,7 @@ RI-1 does not yet implement:
 - PDF active-content sanitization;
 - encrypted-PDF handling;
 - archive/container expansion;
-- durable object storage;
+- durable source-reference/acquisition persistence;
 - persistent document/processing identities;
 - application authentication/authorization;
 - idempotency persistence;
@@ -58,4 +66,5 @@ Those require explicit ports/policies or RI-1.5 behavior rather than hidden assu
 - [x] unsupported media explicit;
 - [x] SHA-256 source identity produced;
 - [x] deterministic tests require no external service;
-- [ ] CI observed passing on current main revision.
+- [x] prior RI-1 CI observed passing (run 37183753155);
+- [ ] CI observed passing on the current source-acquisition revision.
