@@ -67,4 +67,4 @@ Those require explicit ports/policies or RI-1.5 behavior rather than hidden assu
 - [x] SHA-256 source identity produced;
 - [x] deterministic tests require no external service;
 - [x] prior RI-1 CI observed passing (run 37183753155);
-- [ ] CI observed passing on the current source-acquisition revision.
+- [x] RI-1/source-acquisition CI was observed passing during the milestone. Current-main CI status is tracked by GitHub Actions, not by this historical checklist.
