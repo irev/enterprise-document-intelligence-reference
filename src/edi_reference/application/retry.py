@@ -11,7 +11,7 @@ from edi_reference.application.lineage import (
     verify_reprocess_observation,
 )
 from edi_reference.domain.ingestion import Clock, IdGenerator
-from edi_reference.domain.lineage import ProcessingRunBinding, RefetchOutcome, ScopedObservation
+from edi_reference.domain.lineage import ProcessingRunBinding, RefetchOutcome, SourceObservation
 from edi_reference.domain.source import ProcessingIntent
 
 
@@ -25,7 +25,7 @@ class RetryAction(StrEnum):
 class RetryResult:
     intent: ProcessingIntent
     action: RetryAction
-    observation: ScopedObservation
+    observation: SourceObservation
     refetch_outcome: RefetchOutcome | None = None
     processing_run: ProcessingRunBinding | None = None
 
@@ -33,7 +33,7 @@ class RetryResult:
 def orchestrate_retry(
     *,
     intent: ProcessingIntent,
-    current: ScopedObservation,
+    current: SourceObservation,
     tenant_id: str,
     application_id: str,
     observation_repository: ObservationRepository,
