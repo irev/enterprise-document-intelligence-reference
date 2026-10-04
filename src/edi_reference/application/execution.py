@@ -6,6 +6,8 @@ from edi_reference.domain.execution import (
     DataEgress,
     ProviderHealth,
     ExecutionPlan,
+    ExecutionAttempt,
+    ExecutionAttemptStatus,
     ExecutionPolicy,
     PlannedStep,
     ProviderCapability,
@@ -85,3 +87,35 @@ def build_execution_plan(
         ))
 
     return ExecutionPlan(policy.policy_id, policy.policy_version, tuple(steps))
+
+
+
+def select_fallback_step(
+    *,
+    failed_attempt: ExecutionAttempt,
+    request: CapabilityRequest,
+    policy: ExecutionPolicy,
+    registry: ProviderRegistry,
+) -> PlannedStep:
+    """Select a policy-authorized fallback after an explicit failed attempt.
+
+    This never widens execution classes or egress permissions. The failed
+    provider is excluded so a retry of the same provider is a separate concern.
+    """
+    if failed_attempt.status is not ExecutionAttemptStatus.FAILED:
+        raise ExecutionPlanningError("FALLBACK_REQUIRES_FAILED_ATTEMPT")
+    if not policy.allow_fallback:
+        raise ExecutionPlanningError("FALLBACK_NOT_ALLOWED")
+    if failed_attempt.capability not in request.required:
+        raise ExecutionPlanningError("CAPABILITY_NOT_REQUESTED")
+
+    providers = tuple(
+        provider for provider in registry.all()
+        if provider.provider_id != failed_attempt.provider_id
+    )
+    plan = build_execution_plan(
+        CapabilityRequest(frozenset({failed_attempt.capability})),
+        policy=policy,
+        registry=ProviderRegistry(providers),
+    )
+    return plan.steps[0]
