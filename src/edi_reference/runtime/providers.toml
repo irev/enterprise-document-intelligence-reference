@@ -11,7 +11,7 @@ capabilities = ["TEXT_EXTRACTION", "LAYOUT"]
 runtime_family = "paddle"
 required = false
 profiles = ["cpu", "nvidia"]
-models = ["pp-ocrv5", "pp-structure-v3"]
+models = ["pp-ocrv6-medium", "pp-ocrv5-server", "pp-structure-v3"]
 
 [providers.qwen25-vl-7b]
 capabilities = ["CLASSIFICATION", "FIELD_EXTRACTION"]
