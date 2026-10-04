@@ -21,7 +21,6 @@ class InMemoryProcessingClaimRepository:
     def save(self, claim: ProcessingClaim) -> None:
         self.claims[claim.message_id] = claim
 
-
     def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         current = self.claims.get(claim.message_id)
         if (
@@ -34,9 +33,16 @@ class InMemoryProcessingClaimRepository:
         self.claims[claim.message_id] = claim
         return True
 
-    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
+    def save_if_generation(
+        self, claim: ProcessingClaim, expected_generation: int, *, now
+    ) -> bool:
         current = self.claims.get(claim.message_id)
-        if (\n            current is None\n            or current.claim_generation != expected_generation\n            or current.status is not ProcessingClaimStatus.CLAIMED\n            or current.lease_until <= now\n        ):
+        if (
+            current is None
+            or current.claim_generation != expected_generation
+            or current.status is not ProcessingClaimStatus.CLAIMED
+            or current.lease_until <= now
+        ):
             return False
         self.claims[claim.message_id] = claim
         return True
