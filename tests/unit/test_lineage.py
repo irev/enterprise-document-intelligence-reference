@@ -87,3 +87,22 @@ def test_refetch_changed_digest_creates_new_observation():
     assert result.observation_id != current.observation_id
     assert result.sha256 == "b" * 64
     assert len(repo.observations) == 2
+
+
+def test_refetch_digest_lookup_is_scoped_before_match():
+    repo = InMemoryObservationRepository()
+    current = observation()
+    repo.save(current)
+    repo.save(ScopedObservation(
+        observation_id="obs-other", document_id="doc-1", tenant_id="tenant-b",
+        application_id="app-a", sha256="b" * 64, byte_length=11,
+        detected_media_type="application/pdf", observed_at=Clock().now(),
+    ))
+    outcome, result = register_refetch(
+        current, tenant_id="tenant-a", application_id="app-a",
+        sha256="b" * 64, byte_length=11, detected_media_type="application/pdf",
+        external_version="v2", repository=repo, clock=Clock(), ids=Ids(),
+    )
+    assert outcome is RefetchOutcome.CHANGED
+    assert result.tenant_id == "tenant-a"
+    assert result.observation_id != "obs-other"
