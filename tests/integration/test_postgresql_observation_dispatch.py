@@ -6,7 +6,6 @@ import pytest
 from edi_reference.adapters.postgresql_lineage import PostgreSqlObservationRepository
 from edi_reference.adapters.postgresql_processing import PostgreSqlProcessingClaimRepository
 from edi_reference.application.processing_consumer import consume_processing_message
-from edi_reference.domain.lineage import SourceObservation
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaimStatus
 
