@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from edi_reference.domain.lineage import ProcessingRunBinding, ScopedObservation
+from edi_reference.domain.lineage import ProcessingRunBinding, SourceObservation
 
 
 class PostgreSqlObservationRepository:
@@ -14,13 +14,13 @@ class PostgreSqlObservationRepository:
     def _map(row):
         if row is None:
             return None
-        return ScopedObservation(
+        return SourceObservation(
             observation_id=row[0], document_id=row[1], tenant_id=row[2],
             application_id=row[3], sha256=row[4], byte_length=row[5],
             detected_media_type=row[6], observed_at=row[7], external_version=row[8],
         )
 
-    def get(self, observation_id: str) -> ScopedObservation | None:
+    def get(self, observation_id: str) -> SourceObservation | None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -31,7 +31,7 @@ class PostgreSqlObservationRepository:
                 )
                 return self._map(cursor.fetchone())
 
-    def save(self, observation: ScopedObservation) -> None:
+    def save(self, observation: SourceObservation) -> None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -50,7 +50,7 @@ class PostgreSqlObservationRepository:
 
     def find_by_scope_document_digest(
         self, tenant_id: str, application_id: str, document_id: str, sha256: str
-    ) -> ScopedObservation | None:
+    ) -> SourceObservation | None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
