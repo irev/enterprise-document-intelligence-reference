@@ -30,7 +30,7 @@ Specification / schemas / conformance vectors
           +---------+---------+
           |                   |
           v                   v
-     Provider ports      Conformance adapter
+     Provider ports      Conformance reporting
           |
           v
    Replaceable adapters
@@ -42,7 +42,7 @@ Initial package boundaries:
 - `contracts` — references to specification versions and observable contract vocabulary.
 - `application` — use-case orchestration; no provider SDK dependencies.
 - `adapters` — replaceable parser/OCR/classifier/extractor/storage/provider integrations.
-- `conformance` — adapter and runner support for specification conformance vectors.
+- `conformance` — machine-readable reporting primitives for specification conformance.
 
 ## RI-0 acceptance criteria
 
@@ -51,7 +51,7 @@ RI-0 is complete when the implementation can:
 1. identify the specification and contract versions it targets;
 2. declare supported capabilities;
 3. represent explicit processing/result states without inventing business authorization;
-4. map abstract conformance input/output through a provider-neutral adapter;
+4. represent conformance outcomes through provider-neutral machine-readable reporting;
 5. emit a machine-readable conformance report shape;
 6. run deterministic unit tests without OCR/model/network dependencies.
 
