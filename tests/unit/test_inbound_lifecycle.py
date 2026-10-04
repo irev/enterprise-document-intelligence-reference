@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from edi_reference.adapters.in_memory import InMemoryAcquisitionAudit, StaticApplicationAuthorizer
-from edi_reference.adapters.inbound_memory import InMemoryInboundRepository, InMemoryProcessingDispatcher
+from edi_reference.adapters.inbound_memory import InMemoryAtomicAcceptanceStore, InMemoryInboundRepository, InMemoryProcessingDispatcher
 from edi_reference.application.inbound import receive_document
 from edi_reference.application.ports import AcquiredSource, ApplicationPrincipal
 from edi_reference.domain.ingestion import SourcePolicy
@@ -111,3 +111,52 @@ def test_idempotency_is_scoped_by_application_and_tenant() -> None:
     assert repository.get_by_idempotency("tenant-a", "app-a", "same") is not None
     assert repository.get_by_idempotency("tenant-a", "app-b", "same") is None
     assert repository.get_by_idempotency("tenant-b", "app-a", "same") is None
+
+
+def test_atomic_acceptance_persists_state_and_pending_outbox_together() -> None:
+    repository = InMemoryInboundRepository()
+    store = InMemoryAtomicAcceptanceStore(repository)
+    result = receive_document(
+        principal=ApplicationPrincipal("app-a"),
+        context=ctx("atomic-1"),
+        source=SourceReference(method=AcquisitionMethod.UPLOAD),
+        authorizer=StaticApplicationAuthorizer({("app-a", "tenant-a")}),
+        acquirer=StaticAcquirer(),
+        audit=InMemoryAcquisitionAudit(),
+        repository=repository,
+        dispatcher=None,
+        acceptance_store=store,
+        policy=SourcePolicy(1024, frozenset({"application/pdf"})),
+        clock=FixedClock(),
+        ids=SequentialIds(),
+    )
+    assert result.status.value == "ACCEPTED"
+    assert repository.records[result.inbound_id].status.value == "ACCEPTED"
+    assert len(store.outbox) == 1
+    message = next(iter(store.outbox.values()))
+    assert message.aggregate_id == result.inbound_id
+    assert message.payload_ref == "sha256:" + result.observation_sha256
+
+
+def test_atomic_acceptance_failure_does_not_persist_accepted_state_or_outbox() -> None:
+    import pytest
+
+    repository = InMemoryInboundRepository()
+    store = InMemoryAtomicAcceptanceStore(repository, fail_before_commit=True)
+    with pytest.raises(RuntimeError, match="ATOMIC_ACCEPTANCE_FAILED"):
+        receive_document(
+            principal=ApplicationPrincipal("app-a"),
+            context=ctx("atomic-fail"),
+            source=SourceReference(method=AcquisitionMethod.UPLOAD),
+            authorizer=StaticApplicationAuthorizer({("app-a", "tenant-a")}),
+            acquirer=StaticAcquirer(),
+            audit=InMemoryAcquisitionAudit(),
+            repository=repository,
+            dispatcher=None,
+            acceptance_store=store,
+            policy=SourcePolicy(1024, frozenset({"application/pdf"})),
+            clock=FixedClock(),
+            ids=SequentialIds(),
+        )
+    assert not store.outbox
+    assert all(record.status.value != "ACCEPTED" for record in repository.records.values())
