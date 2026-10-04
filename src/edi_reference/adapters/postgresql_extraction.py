@@ -9,6 +9,22 @@ from edi_reference.domain.extraction import ExtractedField, FieldState
 from edi_reference.domain.normalization import NormalizedField, NormalizedValue
 
 
+@dataclass(frozen=True, slots=True)
+class DurableFieldRecord:
+    field_name: str
+    state: str
+    raw_value: str | None
+    value_type: str
+    confidence: float | None
+    extractor_id: str
+    extractor_version: str
+    schema_version: str
+    normalized_value: Any | None
+    normalized_value_type: str | None
+    normalizer_id: str | None
+    normalizer_version: str | None
+
+
 class PostgreSqlExtractedFieldRepository:
     def __init__(self, connect: Callable[[], Any]):
         self._connect = connect
@@ -62,9 +78,9 @@ class PostgreSqlExtractedFieldRepository:
                             ),
                         )
 
-    def list_for_result(
+    def list_records(
         self, result_id: str, result_version: str
-    ) -> tuple[NormalizedField, ...]:
+    ) -> tuple[DurableFieldRecord, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -81,23 +97,4 @@ class PostgreSqlExtractedFieldRepository:
                        ORDER BY f.field_ordinal""",
                     (result_id, result_version),
                 )
-                rows = cursor.fetchall()
-
-        fields = []
-        for row in rows:
-            extracted = ExtractedField(
-                field_name=row[0],
-                state=FieldState(row[1]),
-                raw_value=row[2],
-                value_type=row[3],
-                confidence=row[4],
-                evidence=(),
-                extractor_id=row[5],
-                extractor_version=row[6],
-                schema_version=row[7],
-            )
-            normalized = None
-            if row[8] is not None:
-                normalized = NormalizedValue(row[8], row[9], row[10], row[11])
-            fields.append(NormalizedField(extracted, normalized))
-        return tuple(fields)
+                return tuple(DurableFieldRecord(*row) for row in cursor.fetchall())
