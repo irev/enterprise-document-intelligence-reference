@@ -32,6 +32,8 @@ def consume_processing_message(
 ) -> ProcessingClaim:
     if message.message_type != "PROCESS_DOCUMENT":
         raise ValueError("UNSUPPORTED_MESSAGE_TYPE")
+    if message.observation_id is None:
+        raise ValueError("OBSERVATION_ID_REQUIRED")
     if not message.payload_ref.startswith("sha256:"):
         raise ValueError("INVALID_CONTENT_REFERENCE")
 
