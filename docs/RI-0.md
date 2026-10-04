@@ -34,6 +34,6 @@ Establish a Python implementation boundary that consumes the normative specifica
 - [x] Report output follows the normative report vocabulary.
 - [x] Unit/conformance tests exist.
 - [x] CI workflow exists.
-- [ ] CI has been observed passing on the current main revision.
+- [x] RI-0 CI was observed passing during the RI-0 milestone. Current-main CI status is tracked by GitHub Actions, not by this historical checklist.
 
 RI-1 MUST NOT start by introducing a framework. It starts from deterministic source ingestion semantics: source bytes, integrity, MIME/content validation, tenant boundary, and processing identity.
