@@ -14,7 +14,7 @@ class ObservationAccessDenied(PermissionError):
 class ObservationRepository(Protocol):
     def get(self, observation_id: str) -> ScopedObservation | None: ...
     def save(self, observation: ScopedObservation) -> None: ...
-    def find_by_document_digest(self, document_id: str, sha256: str) -> ScopedObservation | None: ...
+    def find_by_scope_document_digest(\n        self, tenant_id: str, application_id: str, document_id: str, sha256: str\n    ) -> ScopedObservation | None: ...
 
 
 class ProcessingRunRepository(Protocol):
@@ -80,7 +80,7 @@ def register_refetch(
     if current.sha256.lower() == sha256.lower():
         return RefetchOutcome.UNCHANGED, current
 
-    existing = repository.find_by_document_digest(current.document_id, sha256.lower())
+    existing = repository.find_by_scope_document_digest(\n        tenant_id, application_id, current.document_id, sha256.lower()\n    )
     if existing is not None:
         require_observation_scope(existing, tenant_id=tenant_id, application_id=application_id)
         return RefetchOutcome.CHANGED, existing
