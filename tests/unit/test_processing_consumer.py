@@ -4,7 +4,7 @@ from edi_reference.adapters.processing_memory import InMemoryProcessingClaimRepo
 from edi_reference.application.processing_consumer import consume_processing_message
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 class Clock:
@@ -26,7 +26,7 @@ class Ids:
 
 class Observations:
     def __init__(self, item=None):
-        self.item = item or ScopedObservation(
+        self.item = item or SourceObservation(
             "obs-1", "inbound-1", "tenant-a", "app-a", "a" * 64,
             100, "application/pdf", Clock().now(),
         )
