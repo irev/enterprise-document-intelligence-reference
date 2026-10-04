@@ -457,6 +457,54 @@ For a production host, also verify the intended ProcessingProfile, runtime state
 
 ## 10. Troubleshooting
 
+### Windows: mypy fails with `librt.base64` or another `librt` module
+
+This failure belongs to the **development/typecheck toolchain** unless an EDI source diagnostic is also reported. `librt` is not an application capability and MUST NOT be added to the EDI core or provider dependency set as a workaround.
+
+The validated repository typecheck baseline is Python 3.12. First determine which interpreter is actually running mypy:
+
+```powershell
+where.exe python
+python --version
+python -c "import sys; print(sys.executable)"
+python -m pip --version
+python -m mypy --version
+```
+
+The interpreter should resolve inside this repository's `.venv\Scripts\python.exe` and report Python 3.12.
+
+If it does not, recreate the environment explicitly:
+
+```powershell
+deactivate 2>$null
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python --version
+python -m mypy src/edi_reference
+```
+
+Prefer `python -m mypy` over a bare `mypy` command so the executable and installed module are tied to the same selected interpreter.
+
+If the error persists in a clean Python 3.12 project environment, capture these diagnostics before changing dependencies:
+
+```powershell
+python -m pip show mypy librt
+python -m pip check
+python -c "import sys, mypy; print(sys.executable); print(mypy.__file__)"
+```
+
+Then compare against the Windows CI typecheck for the same commit. If CI succeeds but the local clean environment fails, investigate local package cache/environment corruption. If Windows CI fails with the same bootstrap/import error, treat it as a pinned development-toolchain compatibility issue and fix the dev dependency constraints centrally.
+
+Do not:
+
+- install Paddle/PyTorch/provider packages into the core environment to fix mypy;
+- add `librt` as an EDI runtime dependency solely for mypy;
+- disable typechecking for Windows to hide the bootstrap failure;
+- interpret a mypy bootstrap failure as an EDI source type error without a source diagnostic.
+
 ### `NVIDIA_RUNTIME_NOT_DETECTED`
 
 Run:
