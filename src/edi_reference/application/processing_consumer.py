@@ -13,6 +13,7 @@ class ProcessingClaimRepository(Protocol):
     def get(self, message_id: str) -> ProcessingClaim | None: ...
     def try_create(self, claim: ProcessingClaim) -> bool: ...
     def save(self, claim: ProcessingClaim) -> None: ...
+    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int) -> bool: ...
 
 
 class DocumentProcessor(Protocol):
@@ -54,6 +55,7 @@ def consume_processing_message(
         status=ProcessingClaimStatus.CLAIMED,
         claimed_at=now,
         lease_until=now + timedelta(seconds=lease_seconds),
+        claim_generation=(existing.claim_generation + 1) if existing else 1,
     )
     if existing is None and not repository.try_create(claim):
         concurrent = repository.get(message.message_id)
@@ -71,7 +73,11 @@ def consume_processing_message(
             status=ProcessingClaimStatus.FAILED,
             failure_code="PROCESSING_FAILED",
         )
-        repository.save(failed)
+        if not repository.save_if_generation(failed, claim.claim_generation):
+            current = repository.get(message.message_id)
+            if current is None:
+                raise RuntimeError("CLAIM_LOST")
+            return current
         return failed
 
     completed = replace(
@@ -80,5 +86,9 @@ def consume_processing_message(
         completed_at=clock.now(),
         failure_code=None,
     )
-    repository.save(completed)
+    if not repository.save_if_generation(completed, claim.claim_generation):
+        current = repository.get(message.message_id)
+        if current is None:
+            raise RuntimeError("CLAIM_LOST")
+        return current
     return completed
