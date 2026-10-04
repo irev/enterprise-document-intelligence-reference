@@ -94,3 +94,25 @@ class ExecutionPlan:
     policy_id: str
     policy_version: str
     steps: tuple[PlannedStep, ...]
+
+
+class ExecutionAttemptStatus(StrEnum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionAttempt:
+    attempt_id: str
+    capability: Capability
+    provider_id: str
+    provider_version: str
+    execution_class: ExecutionClass
+    status: ExecutionAttemptStatus
+    failure_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is ExecutionAttemptStatus.SUCCEEDED and self.failure_code is not None:
+            raise ValueError("SUCCESS_CANNOT_HAVE_FAILURE_CODE")
+        if self.status is ExecutionAttemptStatus.FAILED and not self.failure_code:
+            raise ValueError("FAILED_ATTEMPT_REQUIRES_FAILURE_CODE")
