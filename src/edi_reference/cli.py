@@ -62,9 +62,20 @@ def inspect_host() -> HostInfo:
     )
 
 
-def resolve_install(provider: str, profile: str, host: HostInfo) -> dict[str, object]:
+def resolve_install(
+    provider: str,
+    profile: str,
+    host: HostInfo,
+    *,
+    python_executable: str = "<runtime-python>",
+) -> dict[str, object]:
     service = RuntimeManagementService(load_provider_manifest())
-    return service.plan_install(provider_id=provider, profile=profile, host=host)
+    return service.plan_install(
+        provider_id=provider,
+        profile=profile,
+        host=host,
+        python_executable=python_executable,
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -116,11 +127,15 @@ def main(argv: list[str] | None = None) -> int:
         try:
             service = RuntimeManagementService(load_provider_manifest())
             runtime_dir = args.runtime_root / args.provider / args.profile
-            python_executable = str(runtime_dir / "venv" / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python"))
-            plan = service.plan_install(
-                provider_id=args.provider,
-                profile=args.profile,
-                host=host,
+            python_executable = str(
+                runtime_dir
+                / "venv"
+                / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
+            )
+            plan = resolve_install(
+                args.provider,
+                args.profile,
+                host,
                 python_executable=python_executable,
             )
         except ValueError as exc:
