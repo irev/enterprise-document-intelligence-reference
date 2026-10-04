@@ -6,7 +6,7 @@ from edi_reference.adapters.lineage_memory import (
     InMemoryObservationRepository, InMemoryProcessingRunRepository,
 )
 from edi_reference.application.retry import RetryAction, orchestrate_retry
-from edi_reference.domain.lineage import RefetchOutcome, ScopedObservation
+from edi_reference.domain.lineage import RefetchOutcome, SourceObservation
 from edi_reference.domain.source import ProcessingIntent, SourceChangedError
 
 
@@ -24,7 +24,7 @@ class Ids:
 
 
 def current():
-    return ScopedObservation(
+    return SourceObservation(
         "obs-1", "doc-1", "tenant-a", "app-a", "a" * 64, 10,
         "application/pdf", Clock().now(),
     )
