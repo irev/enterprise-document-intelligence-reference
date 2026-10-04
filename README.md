@@ -4,7 +4,7 @@ Reference implementation for the technology-neutral [Enterprise Document Intelli
 
 ## Status
 
-**RI-0 — Contract and conformance foundation**
+**RI-0.5 — Shared service architecture foundation**
 
 This repository demonstrates one possible implementation of the specification. It is **not** the normative source of platform behavior. When implementation behavior conflicts with the specification, the specification and its versioned contracts take precedence.
 
@@ -81,3 +81,5 @@ python -m pytest
 ```
 
 See `AGENTS.md` before making architecture or contract changes.
+
+The implementation is intended to operate as a shared service for multiple authorized consumer applications. See `docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md`.
