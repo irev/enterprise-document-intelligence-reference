@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from edi_reference.adapters.processing_memory import InMemoryProcessingClaimRepository
-from edi_reference.application.processing_consumer import consume_processing_message, renew_processing_lease
+from edi_reference.application.processing_consumer import ProcessingFailure, consume_processing_message, renew_processing_lease
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
 from edi_reference.domain.lineage import SourceObservation
@@ -43,7 +43,7 @@ class Processor:
     def process(self, claim):
         self.calls += 1
         if self.fail:
-            raise RuntimeError("sensitive provider detail")
+            raise ProcessingFailure("sensitive provider detail")
 
 
 def message():
@@ -331,3 +331,55 @@ def test_long_running_processor_cannot_finalize_after_lease_loss():
     assert persisted.status is ProcessingClaimStatus.CLAIMED
     assert result == persisted
     assert result.status is not ProcessingClaimStatus.COMPLETED
+
+
+
+class DefectiveProcessor:
+    def process(self, claim):
+        raise NameError("implementation defect")
+
+
+def test_unexpected_processor_defect_is_not_persisted_as_processing_failure():
+    import pytest
+
+    repo = InMemoryProcessingClaimRepository()
+    with pytest.raises(NameError, match="implementation defect"):
+        consume_processing_message(
+            message(),
+            repository=repo,
+            processor=DefectiveProcessor(),
+            observations=Observations(),
+            clock=Clock(),
+            ids=Ids(),
+        )
+
+    persisted = repo.get(message().message_id)
+    assert persisted is not None
+    assert persisted.status is ProcessingClaimStatus.CLAIMED
+    assert persisted.failure_code is None
+
+
+class WrongLeaseAwareSignatureProcessor:
+    def process(self, claim):
+        pass
+
+
+def test_lease_aware_signature_defect_fails_fast():
+    import pytest
+
+    repo = InMemoryProcessingClaimRepository()
+    with pytest.raises(TypeError):
+        consume_processing_message(
+            message(),
+            repository=repo,
+            processor=WrongLeaseAwareSignatureProcessor(),
+            observations=Observations(),
+            clock=Clock(),
+            ids=Ids(),
+            lease_aware=True,
+        )
+
+    persisted = repo.get(message().message_id)
+    assert persisted is not None
+    assert persisted.status is ProcessingClaimStatus.CLAIMED
+    assert persisted.failure_code is None
