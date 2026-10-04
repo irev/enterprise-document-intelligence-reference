@@ -50,14 +50,6 @@ jobs:
       - name: Install with PostgreSQL adapter
         run: python -m pip install -e ".[dev,postgres]"
       - name: Apply PostgreSQL migrations
-        env:
-          PGPASSWORD: edi
-        run: |
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0001_control_plane.sql
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0002_inbound_outbox.sql
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0003_source_lineage.sql
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0004_processing_claim.sql
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0005_observation_dispatch.sql
-          psql -h localhost -U edi -d edi_test -v ON_ERROR_STOP=1 -f migrations/0006_lineage_referential_integrity.sql
+        run: python scripts/apply_migrations.py --dsn "$EDI_TEST_POSTGRES_DSN"
       - name: PostgreSQL integration tests
         run: python -m pytest tests/integration -vv
