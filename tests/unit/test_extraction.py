@@ -61,3 +61,17 @@ def test_duplicate_field_names_are_rejected():
     one = field("invoice_number", FieldState.PRESENT, "INV-001", EV)
     with pytest.raises(ValueError, match="DUPLICATE_FIELD_NAME"):
         extract_fields(DOC, document_type="INVOICE", extractor=Extractor([one, one]))
+
+
+def test_explicit_null_requires_observed_raw_marker():
+    with pytest.raises(ValueError, match="EXPLICIT_NULL_REQUIRES_RAW_VALUE_AND_EVIDENCE"):
+        field("reference", FieldState.EXPLICIT_NULL, raw=None, evidence=EV)
+
+
+def test_invalid_field_requires_raw_value_and_evidence():
+    result = field("total_amount", FieldState.INVALID, raw="Rp ???", evidence=EV)
+    assert result.state is FieldState.INVALID
+    with pytest.raises(ValueError, match="INVALID_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE"):
+        field("total_amount", FieldState.INVALID, raw=None, evidence=EV)
+    with pytest.raises(ValueError, match="INVALID_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE"):
+        field("total_amount", FieldState.INVALID, raw="Rp ???", evidence=())
