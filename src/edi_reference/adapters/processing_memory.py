@@ -33,6 +33,19 @@ class InMemoryProcessingClaimRepository:
         self.claims[claim.message_id] = claim
         return True
 
+    def try_renew_lease(self, message_id: str, expected_generation: int, *, now, lease_until) -> bool:
+        current = self.claims.get(message_id)
+        if (
+            current is None
+            or current.claim_generation != expected_generation
+            or current.status is not ProcessingClaimStatus.CLAIMED
+            or current.lease_until <= now
+        ):
+            return False
+        from dataclasses import replace
+        self.claims[message_id] = replace(current, lease_until=lease_until)
+        return True
+
     def save_if_generation(
         self, claim: ProcessingClaim, expected_generation: int, *, now
     ) -> bool:
