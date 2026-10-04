@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any\n\nfrom edi_reference.adapters.paddle_ocr import PaddleOcrEngine
 
 from edi_reference.application.paddle_models import ModelArtifactState, verify_paddle_model
 
@@ -51,3 +51,13 @@ def build_paddle_pipeline(
             text_recognition_model_name="PP-OCRv5_server_rec",
         )
     raise ValueError("MODEL_NOT_SUPPORTED_BY_OCR_PIPELINE")
+
+
+@dataclass(frozen=True, slots=True)
+class PaddleOcrEngineFactory:
+    """Picklable factory for spawn-isolated OCR workers."""
+
+    configuration: PaddlePipelineConfiguration
+
+    def __call__(self) -> PaddleOcrEngine:
+        return PaddleOcrEngine(build_paddle_pipeline(self.configuration))
