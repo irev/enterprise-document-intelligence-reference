@@ -31,7 +31,7 @@ def test_planned_provider_must_resolve_for_tenant_and_application():
         STEP, provider=PROVIDER,
         configurations=ProviderConfigurationRegistry((config(
             tenant_allowlist=frozenset({"tenant-a"}),
-            application_allowlist=frozenset({"app-a"}),
+            application_allowlist=frozenset({("tenant-a", "app-a")}),
         ),)),
         tenant_id="tenant-a", application_id="app-a",
     )
@@ -88,7 +88,7 @@ def test_planned_invocation_authorizes_before_calling_provider():
         provider=PROVIDER,
         configurations=ProviderConfigurationRegistry((config(
             tenant_allowlist=frozenset({"tenant-a"}),
-            application_allowlist=frozenset({"app-a"}),
+            application_allowlist=frozenset({("tenant-a", "app-a")}),
         ),)),
         tenant_id="tenant-a", application_id="app-a",
         policy=ExecutionPolicy("local", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False),
