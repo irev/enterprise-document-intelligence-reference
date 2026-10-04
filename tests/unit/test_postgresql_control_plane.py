@@ -1,0 +1,47 @@
+from edi_reference.adapters.postgresql_control_plane import PostgreSqlProviderConfigurationSource
+
+
+class Cursor:
+    def __init__(self):
+        self.query = ""
+
+    def execute(self, query, params):
+        self.query = query
+
+    def fetchone(self):
+        if "provider_configuration" in self.query:
+            return ("local-ocr", "cfg-2", False, "trusted-local", "paddle", None, None)
+        return None
+
+    def fetchall(self):
+        if "provider_tenant_authorization" in self.query:
+            return [("tenant-a",)]
+        if "provider_application_authorization" in self.query:
+            return [("app-a",)]
+        return []
+
+    def close(self):
+        pass
+
+
+class Connection:
+    def __init__(self):
+        self.closed = False
+
+    def cursor(self):
+        return Cursor()
+
+    def close(self):
+        self.closed = True
+
+
+def test_postgresql_source_returns_current_configuration_and_authorization():
+    connection = Connection()
+    source = PostgreSqlProviderConfigurationSource(lambda: connection)
+    result = source.get("local-ocr")
+    assert result.provider_id == "local-ocr"
+    assert result.config_version == "cfg-2"
+    assert result.enabled is False
+    assert result.tenant_allowlist == frozenset({"tenant-a"})
+    assert result.application_allowlist == frozenset({"app-a"})
+    assert connection.closed
