@@ -11,6 +11,7 @@ from edi_reference.application.ports import (
     SourceAcquirer,
 )
 from edi_reference.domain.inbound import InboundRecord, InboundStatus, ProcessingDispatch
+from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.ingestion import Clock, IdGenerator, SourcePolicy
 from edi_reference.domain.integration import InteractionContext
 from edi_reference.domain.source import SourceReference
@@ -26,6 +27,12 @@ class ProcessingDispatcher(Protocol):
     def dispatch(self, item: ProcessingDispatch) -> None: ...
 
 
+class InboundAcceptanceStore(Protocol):
+    """Atomically persist ACCEPTED inbound state and its processing outbox message."""
+
+    def accept_and_enqueue(self, record: InboundRecord, message: OutboxMessage) -> None: ...
+
+
 def receive_document(
     *,
     principal: ApplicationPrincipal,
@@ -35,7 +42,8 @@ def receive_document(
     acquirer: SourceAcquirer,
     audit: AcquisitionAuditSink,
     repository: InboundRepository,
-    dispatcher: ProcessingDispatcher,
+    dispatcher: ProcessingDispatcher | None,
+    acceptance_store: InboundAcceptanceStore | None = None,
     policy: SourcePolicy,
     clock: Clock,
     ids: IdGenerator,
@@ -91,19 +99,39 @@ def receive_document(
         observation_sha256=event.sha256,
         failure_code=event.failure_code,
     )
-    repository.save(final)
-
     if final.status is InboundStatus.ACCEPTED and final.observation_sha256:
-        dispatcher.dispatch(
-            ProcessingDispatch(
-                dispatch_id=ids.new_id(),
-                inbound_id=final.inbound_id,
-                tenant_id=final.tenant_id,
-                application_id=final.application_id,
-                correlation_id=final.correlation_id,
-                observation_sha256=final.observation_sha256,
-                created_at=clock.now(),
+        if acceptance_store is not None:
+            acceptance_store.accept_and_enqueue(
+                final,
+                OutboxMessage(
+                    message_id=ids.new_id(),
+                    tenant_id=final.tenant_id,
+                    application_id=final.application_id,
+                    correlation_id=final.correlation_id,
+                    aggregate_id=final.inbound_id,
+                    message_type="PROCESS_DOCUMENT",
+                    payload_ref="sha256:" + final.observation_sha256,
+                    created_at=clock.now(),
+                ),
             )
-        )
+        else:
+            # Compatibility path for the reference's earlier dispatcher port.
+            # Production adapters must use acceptance_store to close the commit/dispatch crash window.
+            repository.save(final)
+            if dispatcher is None:
+                raise ValueError("PROCESSING_DISPATCHER_REQUIRED")
+            dispatcher.dispatch(
+                ProcessingDispatch(
+                    dispatch_id=ids.new_id(),
+                    inbound_id=final.inbound_id,
+                    tenant_id=final.tenant_id,
+                    application_id=final.application_id,
+                    correlation_id=final.correlation_id,
+                    observation_sha256=final.observation_sha256,
+                    created_at=clock.now(),
+                )
+            )
+    else:
+        repository.save(final)
 
     return final
