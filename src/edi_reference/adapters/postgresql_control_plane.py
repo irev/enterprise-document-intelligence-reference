@@ -48,14 +48,14 @@ class PostgreSqlProviderConfigurationSource(ProviderConfigurationSource):
 
                 cursor.execute(
                     """
-                    SELECT application_id
+                    SELECT tenant_id, application_id
                     FROM control_plane.provider_application_authorization
                     WHERE provider_id = %s AND authorized = true
-                    ORDER BY application_id
+                    ORDER BY tenant_id, application_id
                     """,
                     (provider_id,),
                 )
-                application_rows = frozenset(item[0] for item in cursor.fetchall())
+                application_rows = frozenset((item[0], item[1]) for item in cursor.fetchall())
                 application_allowlist = None if row[8] == "UNRESTRICTED" else application_rows
 
                 return ProviderConfiguration(
