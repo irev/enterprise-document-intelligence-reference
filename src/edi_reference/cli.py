@@ -7,8 +7,10 @@ import json
 import platform
 import shutil
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 
+from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import load_provider_manifest
 
 
@@ -18,26 +20,16 @@ class HostInfo:
     architecture: str
     docker: bool
     nvidia_smi: bool
+    nvidia_driver_version: tuple[int, int, int] | None = None
 
 
-
-
-def inspect_host() -> HostInfo:
-    return HostInfo(
-        os=platform.system().lower(),
-        architecture=platform.machine().lower(),
-        docker=shutil.which("docker") is not None,
-        nvidia_smi=shutil.which("nvidia-smi") is not None,
-    )
-
-
-def _nvidia_summary() -> str | None:
+def _nvidia_query(field: str) -> str | None:
     executable = shutil.which("nvidia-smi")
     if executable is None:
         return None
     try:
         result = subprocess.run(
-            [executable, "--query-gpu=name,memory.total", "--format=csv,noheader"],
+            [executable, f"--query-gpu={field}", "--format=csv,noheader"],
             capture_output=True,
             check=False,
             text=True,
@@ -45,38 +37,72 @@ def _nvidia_summary() -> str | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
-    return result.stdout.strip() if result.returncode == 0 else None
+    value = result.stdout.strip().splitlines()
+    return value[0].strip() if result.returncode == 0 and value else None
+
+
+def _parse_version(value: str | None) -> tuple[int, int, int] | None:
+    if not value:
+        return None
+    try:
+        parts = [int(part) for part in value.split(".")[:3]]
+    except ValueError:
+        return None
+    return tuple((parts + [0, 0, 0])[:3])  # type: ignore[return-value]
+
+
+def inspect_host() -> HostInfo:
+    driver = _parse_version(_nvidia_query("driver_version"))
+    return HostInfo(
+        os=platform.system().lower(),
+        architecture=platform.machine().lower(),
+        docker=shutil.which("docker") is not None,
+        nvidia_smi=shutil.which("nvidia-smi") is not None,
+        nvidia_driver_version=driver,
+    )
 
 
 def resolve_install(provider: str, profile: str, host: HostInfo) -> dict[str, object]:
     definition = load_provider_manifest().providers.get(provider)
     if definition is None:
         raise ValueError("UNKNOWN_PROVIDER")
-    profiles = definition.profiles
-    if profile not in profiles:
+    if profile not in definition.profiles:
         raise ValueError("UNSUPPORTED_PROVIDER_PROFILE")
     if profile == "nvidia" and not host.nvidia_smi:
         raise ValueError("NVIDIA_RUNTIME_NOT_DETECTED")
     if profile == "mps" and host.os != "darwin":
         raise ValueError("MPS_REQUIRES_MACOS")
-    return {
+
+    payload: dict[str, object] = {
         "provider": provider,
         "profile": profile,
         "host": asdict(host),
         "execution": "isolated-runtime",
         "status": "PLANNED",
     }
+    if provider == "paddle-ocr":
+        paddle = build_paddle_install_plan(
+            python_executable=sys.executable,
+            profile=profile,
+            nvidia_driver_version=host.nvidia_driver_version,
+        )
+        payload["steps"] = [{"name": step.name, "argv": list(step.argv)} for step in paddle.steps]
+        payload["verify_argv"] = list(paddle.verify_argv)
+    return payload
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="edi")
     commands = parser.add_subparsers(dest="command", required=True)
-
     commands.add_parser("doctor")
 
     providers = commands.add_parser("providers")
     provider_commands = providers.add_subparsers(dest="provider_command", required=True)
     provider_commands.add_parser("list")
+
+    models = commands.add_parser("models")
+    model_commands = models.add_subparsers(dest="model_command", required=True)
+    model_commands.add_parser("list")
 
     install = commands.add_parser("install")
     install.add_argument("--provider", required=True)
@@ -91,13 +117,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         payload = asdict(host)
-        payload["nvidia_gpu"] = _nvidia_summary()
+        payload["nvidia_gpu"] = _nvidia_query("name,memory.total")
         print(json.dumps(payload, indent=2))
         return 0
 
+    manifest = load_provider_manifest()
     if args.command == "providers":
-        for provider, definition in load_provider_manifest().providers.items():
+        for provider, definition in manifest.providers.items():
             print(f"{provider}: {', '.join(definition.profiles)}")
+        return 0
+
+    if args.command == "models":
+        for provider, definition in manifest.providers.items():
+            for model in definition.models:
+                print(f"{provider}: {model}")
         return 0
 
     if args.command == "install":
