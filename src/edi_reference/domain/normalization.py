@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from edi_reference.domain.extraction import ExtractedField
+
 
 class NormalizationError(ValueError):
     def __init__(self, code: str):
@@ -16,6 +18,16 @@ class NormalizedValue:
     value_type: str
     normalizer_id: str
     normalizer_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedField:
+    extracted: ExtractedField
+    normalized: NormalizedValue | None
+
+    @property
+    def field_name(self) -> str:
+        return self.extracted.field_name
 
 
 class Normalizer(Protocol):
