@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 from edi_reference.adapters.paddle_ocr import PaddleOcrEngine, paddle_results_to_ocr_result
@@ -32,10 +30,9 @@ def test_paddle_engine_requires_positive_timeout():
         PaddleOcrEngine(Pipeline()).extract_text(b"x", timeout_seconds=0)
 
 
-def test_missing_optional_dependency_has_stable_error(monkeypatch):
-    monkeypatch.setitem(sys.modules, "paddleocr", None)
-    with pytest.raises(RuntimeError, match="PADDLEOCR_NOT_INSTALLED"):
-        PaddleOcrEngine()
+def test_explicit_pipeline_is_required():
+    with pytest.raises(ValueError, match="EXPLICIT_PADDLE_PIPELINE_REQUIRED"):
+        PaddleOcrEngine(None)
 
 
 def test_paddle_geometry_is_normalized_into_structured_ocr():
