@@ -125,6 +125,8 @@ def receive_document(
         failure_code=event.failure_code,
     )
     if final.status is InboundStatus.ACCEPTED and final.observation_sha256:
+        if event.byte_length is None or event.media_type is None:
+            raise ValueError("ACCEPTED_ACQUISITION_REQUIRES_OBSERVATION_METADATA")
         if acceptance_store is not None:
             observation = SourceObservation(
                 observation_id=ids.new_id(),
@@ -132,8 +134,8 @@ def receive_document(
                 tenant_id=final.tenant_id,
                 application_id=final.application_id,
                 sha256=final.observation_sha256.lower(),
-                byte_length=event.byte_length or 0,
-                detected_media_type=event.media_type or "application/octet-stream",
+                byte_length=event.byte_length,
+                detected_media_type=event.media_type,
                 observed_at=event.occurred_at,
                 external_version=event.external_version,
             )
