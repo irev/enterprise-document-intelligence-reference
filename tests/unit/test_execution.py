@@ -1,9 +1,9 @@
 import pytest
 
-from edi_reference.application.execution import ExecutionPlanningError, ProviderRegistry, build_execution_plan
+from edi_reference.application.execution import ExecutionPlanningError, ProviderRegistry, build_execution_plan, select_fallback_step
 from edi_reference.domain.execution import (
     Capability, CapabilityExecutionPolicy, CapabilityRequest, DataEgress, ExecutionClass,
-    ExecutionPolicy, ProviderCapability, ProviderHealth,
+    ExecutionAttempt, ExecutionAttemptStatus, ExecutionPolicy, ProviderCapability, ProviderHealth,
 )
 
 
@@ -130,4 +130,61 @@ def test_capability_preference_cannot_widen_allowed_execution_classes():
                 Capability.CLASSIFICATION,
                 (ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL),
             ),),
+        )
+
+
+def test_runtime_fallback_requires_explicit_failed_attempt_and_policy():
+    failed = ExecutionAttempt(
+        "attempt-1", Capability.CLASSIFICATION, "local-model-a", "1",
+        ExecutionClass.LOCAL_MODEL, ExecutionAttemptStatus.FAILED, "PROVIDER_FAILED",
+    )
+    policy = ExecutionPolicy(
+        "hybrid", "1",
+        frozenset({ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL}),
+        True, True,
+        (CapabilityExecutionPolicy(
+            Capability.CLASSIFICATION,
+            (ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL),
+        ),),
+    )
+    step = select_fallback_step(
+        failed_attempt=failed,
+        request=CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+        policy=policy,
+        registry=ProviderRegistry((LOCAL, REMOTE)),
+    )
+    assert step.provider_id == "remote-model-a"
+
+
+def test_runtime_fallback_cannot_bypass_local_only_policy():
+    failed = ExecutionAttempt(
+        "attempt-1", Capability.CLASSIFICATION, "local-model-a", "1",
+        ExecutionClass.LOCAL_MODEL, ExecutionAttemptStatus.FAILED, "PROVIDER_FAILED",
+    )
+    with pytest.raises(ExecutionPlanningError, match="NO_ELIGIBLE_PROVIDER"):
+        select_fallback_step(
+            failed_attempt=failed,
+            request=CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+            policy=ExecutionPolicy(
+                "local-only", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False, True
+            ),
+            registry=ProviderRegistry((LOCAL, REMOTE)),
+        )
+
+
+def test_runtime_fallback_requires_policy_permission():
+    failed = ExecutionAttempt(
+        "attempt-1", Capability.CLASSIFICATION, "local-model-a", "1",
+        ExecutionClass.LOCAL_MODEL, ExecutionAttemptStatus.FAILED, "PROVIDER_FAILED",
+    )
+    with pytest.raises(ExecutionPlanningError, match="FALLBACK_NOT_ALLOWED"):
+        select_fallback_step(
+            failed_attempt=failed,
+            request=CapabilityRequest(frozenset({Capability.CLASSIFICATION})),
+            policy=ExecutionPolicy(
+                "no-fallback", "1",
+                frozenset({ExecutionClass.LOCAL_MODEL, ExecutionClass.REMOTE_MODEL}),
+                True, False,
+            ),
+            registry=ProviderRegistry((LOCAL, REMOTE)),
         )
