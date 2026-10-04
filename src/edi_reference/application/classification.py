@@ -45,15 +45,14 @@ def classify_document(
     *,
     classifier: ClassifierAdapter,
     policy: ClassificationPolicy,
-    taxonomy: DocumentTaxonomy | None = None,
+    taxonomy: DocumentTaxonomy,
 ) -> ClassificationPrediction:
     raw = classifier.classify(document)
-    if taxonomy is not None:
-        validate_candidates(
-            raw.candidates,
-            taxonomy=taxonomy,
-            classifier_taxonomy_version=classifier.taxonomy_version,
-        )
+    validate_candidates(
+        raw.candidates,
+        taxonomy=taxonomy,
+        classifier_taxonomy_version=classifier.taxonomy_version,
+    )
     if not raw.candidates:
         return _unknown(classifier, raw.evidence)
 
