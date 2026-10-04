@@ -16,13 +16,6 @@ def connect():
     return psycopg.connect(DSN)
 
 
-def migrate():
-    with connect() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(open("migrations/0001_control_plane.sql", encoding="utf-8").read())
-            cursor.execute(open("migrations/0002_inbound_outbox.sql", encoding="utf-8").read())
-
-
 def seed_application():
     with connect() as connection:
         with connection.cursor() as cursor:
@@ -51,7 +44,6 @@ def message():
 
 
 def test_acceptance_and_outbox_commit_atomically():
-    migrate()
     seed_application()
     store = PostgreSqlInboundStore(connect)
     with connect() as connection:
@@ -70,7 +62,6 @@ def test_acceptance_and_outbox_commit_atomically():
 
 
 def test_failed_outbox_insert_rolls_back_acceptance():
-    migrate()
     seed_application()
     store = PostgreSqlInboundStore(connect)
     with connect() as connection:
