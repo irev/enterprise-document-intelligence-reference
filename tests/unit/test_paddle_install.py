@@ -7,8 +7,8 @@ def test_cpu_plan_isolated_from_gpu_package() -> None:
     plan = build_paddle_install_plan(python_executable="python", profile="cpu")
 
     commands = [step.argv for step in plan.steps]
-    assert any("paddlepaddle==3.2.1" in command for command in commands)
-    assert all("paddlepaddle-gpu==3.2.1" not in command for command in commands)
+    assert any("paddlepaddle==3.2.0" in command for command in commands)
+    assert all("paddlepaddle-gpu==3.2.0" not in command for command in commands)
     assert any("paddleocr[doc-parser]>=3.7,<3.8" in command for command in commands)
 
 
