@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from edi_reference.application.provider_manifest import load_provider_manifest
 from edi_reference.application.runtime_management import RuntimeManagementService
@@ -83,6 +84,8 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--provider", required=True)
     install.add_argument("--profile", required=True)
     install.add_argument("--dry-run", action="store_true")
+    install.add_argument("--yes", action="store_true")
+    install.add_argument("--runtime-root", type=Path, default=Path(".edi/runtimes"))
     return parser
 
 
@@ -111,14 +114,36 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "install":
         try:
-            plan = resolve_install(args.provider, args.profile, host)
+            service = RuntimeManagementService(load_provider_manifest())
+            runtime_dir = args.runtime_root / args.provider / args.profile
+            from edi_reference.application.runtime_installer import ensure_runtime_venv
+            python_executable = str(runtime_dir / "venv" / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python"))
+            plan = service.plan_install(
+                provider_id=args.provider,
+                profile=args.profile,
+                host=host,
+                python_executable=python_executable,
+            )
         except ValueError as exc:
             print(str(exc))
             return 2
-        if not args.dry_run:
-            print("INSTALL_EXECUTION_NOT_IMPLEMENTED_USE_DRY_RUN")
+        if args.dry_run:
+            print(json.dumps(plan, indent=2))
+            return 0
+        if not args.yes:
+            print("INSTALL_CONFIRMATION_REQUIRED_USE_YES")
             return 2
-        print(json.dumps(plan, indent=2))
+        try:
+            result = service.install_provider(
+                provider_id=args.provider,
+                profile=args.profile,
+                host=host,
+                runtime_root=args.runtime_root,
+            )
+        except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            print(str(exc))
+            return 2
+        print(json.dumps(asdict(result), indent=2))
         return 0
 
     return 2
