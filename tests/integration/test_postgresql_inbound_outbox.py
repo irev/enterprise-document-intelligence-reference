@@ -85,11 +85,14 @@ def test_failed_outbox_insert_rolls_back_acceptance():
     store = PostgreSqlInboundStore(connect)
     with connect() as connection:
         with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM processing.processing_claim WHERE message_id='message-atomic'")
             cursor.execute("DELETE FROM integration.outbox_message WHERE aggregate_id='inbound-atomic'")
+            cursor.execute("DELETE FROM ingestion.source_observation WHERE document_id='inbound-atomic'")
+            cursor.execute("DELETE FROM ingestion.document WHERE document_id='inbound-atomic'")
             cursor.execute("DELETE FROM ingestion.inbound_request WHERE inbound_id='inbound-atomic'")
     store.save(record())
 
-    # Duplicate message_id makes the outbox INSERT fail after the inbound UPDATE.
+    # Duplicate message_id makes the outbox INSERT fail after the observation and inbound writes.
     first = message()
     store.accept_and_enqueue(record(InboundStatus.ACCEPTED), observation(), first)
     # Restore ACQUIRING while keeping the committed outbox row to create a
