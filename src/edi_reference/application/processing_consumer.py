@@ -7,6 +7,7 @@ from typing import Protocol
 from edi_reference.domain.ingestion import Clock, IdGenerator
 from edi_reference.domain.outbox import OutboxMessage
 from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
+from edi_reference.domain.lineage import ScopedObservation
 
 
 class ProcessingClaimRepository(Protocol):
@@ -15,6 +16,10 @@ class ProcessingClaimRepository(Protocol):
     def save(self, claim: ProcessingClaim) -> None: ...
     def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
     def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
+
+
+class ObservationRepository(Protocol):
+    def get(self, observation_id: str) -> ScopedObservation | None: ...
 
 
 class DocumentProcessor(Protocol):
@@ -26,6 +31,7 @@ def consume_processing_message(
     *,
     repository: ProcessingClaimRepository,
     processor: DocumentProcessor,
+    observations: ObservationRepository,
     clock: Clock,
     ids: IdGenerator,
     lease_seconds: int = 300,
@@ -34,8 +40,13 @@ def consume_processing_message(
         raise ValueError("UNSUPPORTED_MESSAGE_TYPE")
     if message.observation_id is None:
         raise ValueError("OBSERVATION_ID_REQUIRED")
-    if not message.payload_ref.startswith("sha256:"):
-        raise ValueError("INVALID_CONTENT_REFERENCE")
+    observation = observations.get(message.observation_id)
+    if observation is None:
+        raise ValueError("OBSERVATION_NOT_FOUND")
+    if (observation.tenant_id, observation.application_id) != (
+        message.tenant_id, message.application_id
+    ):
+        raise ValueError("OBSERVATION_SCOPE_MISMATCH")
 
     existing = repository.get(message.message_id)
     now = clock.now()
@@ -45,9 +56,7 @@ def consume_processing_message(
         if existing.status is ProcessingClaimStatus.CLAIMED and existing.lease_until > now:
             return existing
 
-    digest = message.payload_ref.removeprefix("sha256:")
-    if len(digest) != 64 or any(ch not in "0123456789abcdefABCDEF" for ch in digest):
-        raise ValueError("INVALID_CONTENT_REFERENCE")
+    digest = observation.sha256.lower()
 
     claim = ProcessingClaim(
         message_id=message.message_id,
