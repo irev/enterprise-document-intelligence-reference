@@ -45,7 +45,7 @@ def test_disabled_provider_is_not_resolved():
 def test_tenant_and_application_allowlists_are_enforced():
     restricted = config(
         tenant_allowlist=frozenset({"tenant-a"}),
-        application_allowlist=frozenset({"app-a"}),
+        application_allowlist=frozenset({("tenant-a", "app-a")}),
     )
     registry = ProviderConfigurationRegistry((restricted,))
     with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_TENANT"):
