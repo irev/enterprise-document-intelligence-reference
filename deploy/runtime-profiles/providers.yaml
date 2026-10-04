@@ -1,0 +1,32 @@
+schema_version: "1"
+providers:
+  paddle-ocr:
+    capabilities: [TEXT_EXTRACTION, LAYOUT]
+    runtime_family: paddle
+    required: false
+    profiles: [cpu, nvidia]
+  qwen25-vl-7b:
+    capabilities: [CLASSIFICATION, FIELD_EXTRACTION]
+    runtime_family: pytorch-transformers
+    required: false
+    profiles: [cpu, nvidia, quantized]
+  qwen25-vl-3b:
+    capabilities: [CLASSIFICATION, FIELD_EXTRACTION]
+    runtime_family: pytorch-transformers
+    required: false
+    profiles: [cpu, nvidia]
+  docling:
+    capabilities: [TEXT_EXTRACTION, LAYOUT]
+    runtime_family: docling
+    required: false
+    profiles: [cpu, accelerator]
+  surya:
+    capabilities: [TEXT_EXTRACTION, LAYOUT]
+    runtime_family: pytorch
+    required: false
+    profiles: [cpu, nvidia, mps]
+policy:
+  core_requires_ml_runtime: false
+  allow_silent_provider_fallback: false
+  production_pin_model_revision: true
+  support_offline_artifacts: true
