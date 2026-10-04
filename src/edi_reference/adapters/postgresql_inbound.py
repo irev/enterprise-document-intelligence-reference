@@ -5,6 +5,7 @@ from typing import Any
 
 from edi_reference.domain.inbound import InboundRecord, InboundStatus
 from edi_reference.domain.outbox import OutboxMessage, OutboxStatus
+from edi_reference.domain.lineage import ScopedObservation
 
 
 class PostgreSqlInboundStore:
@@ -58,16 +59,50 @@ class PostgreSqlInboundStore:
                     ),
                 )
 
-    def accept_and_enqueue(self, record: InboundRecord, message: OutboxMessage) -> None:
+    def accept_and_enqueue(
+        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+    ) -> None:
         if record.status is not InboundStatus.ACCEPTED:
             raise ValueError("ATOMIC_ACCEPTANCE_REQUIRES_ACCEPTED_RECORD")
         if message.status is not OutboxStatus.PENDING:
             raise ValueError("ATOMIC_ACCEPTANCE_REQUIRES_PENDING_MESSAGE")
         if message.aggregate_id != record.inbound_id:
             raise ValueError("OUTBOX_AGGREGATE_MISMATCH")
+        if observation.document_id != record.inbound_id:
+            raise ValueError("OBSERVATION_DOCUMENT_MISMATCH")
+        if (observation.tenant_id, observation.application_id) != (record.tenant_id, record.application_id):
+            raise ValueError("OBSERVATION_SCOPE_MISMATCH")
+        if observation.sha256.lower() != (record.observation_sha256 or "").lower():
+            raise ValueError("OBSERVATION_DIGEST_MISMATCH")
+        if message.observation_id != observation.observation_id:
+            raise ValueError("OUTBOX_OBSERVATION_MISMATCH")
 
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                cursor.execute(
+                    """INSERT INTO ingestion.document
+                       (document_id, tenant_id, application_id, created_at)
+                       VALUES (%s,%s,%s,%s)
+                       ON CONFLICT (document_id) DO NOTHING""",
+                    (
+                        observation.document_id, observation.tenant_id,
+                        observation.application_id, observation.observed_at,
+                    ),
+                )
+                cursor.execute(
+                    """INSERT INTO ingestion.source_observation
+                       (observation_id, document_id, tenant_id, application_id, sha256,
+                        byte_length, detected_media_type, observed_at, external_version)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        observation.observation_id, observation.document_id,
+                        observation.tenant_id, observation.application_id,
+                        observation.sha256, observation.byte_length,
+                        observation.detected_media_type, observation.observed_at,
+                        observation.external_version,
+                    ),
+                )
+
                 cursor.execute(
                     """UPDATE ingestion.inbound_request
                        SET status=%s, updated_at=%s, observation_sha256=%s, failure_code=%s
