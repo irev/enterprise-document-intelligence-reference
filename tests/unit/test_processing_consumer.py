@@ -263,3 +263,40 @@ def test_stale_generation_cannot_renew_newer_claim():
     with pytest.raises(RuntimeError, match="CLAIM_LEASE_LOST"):
         renew_processing_lease(stale, repository=repo, clock=clock)
     assert repo.get(current.message_id) == current
+
+
+class LeaseAwareProcessor:
+    def __init__(self, clock):
+        self.clock = clock
+        self.calls = 0
+        self.renewed = None
+
+    def process(self, claim, renew_lease):
+        self.calls += 1
+        self.clock.value += timedelta(seconds=30)
+        self.renewed = renew_lease()
+
+
+def test_long_running_processor_renews_lease_before_finalization():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    processor = LeaseAwareProcessor(clock)
+
+    result = consume_processing_message(
+        message(),
+        repository=repo,
+        processor=processor,
+        observations=Observations(),
+        clock=clock,
+        ids=Ids(),
+        lease_seconds=60,
+        lease_aware=True,
+    )
+
+    assert processor.calls == 1
+    assert processor.renewed is not None
+    assert processor.renewed.claim_generation == 1
+    assert processor.renewed.lease_until == clock.now() + timedelta(seconds=60)
+    assert result.status is ProcessingClaimStatus.COMPLETED
+    assert result.claim_generation == 1
+    assert result.lease_until == processor.renewed.lease_until
