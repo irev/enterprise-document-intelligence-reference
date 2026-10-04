@@ -14,7 +14,7 @@ class ProcessingClaimRepository(Protocol):
     def try_create(self, claim: ProcessingClaim) -> bool: ...
     def save(self, claim: ProcessingClaim) -> None: ...
     def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
-    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int) -> bool: ...
+    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
 
 
 class DocumentProcessor(Protocol):
@@ -78,7 +78,7 @@ def consume_processing_message(
             status=ProcessingClaimStatus.FAILED,
             failure_code="PROCESSING_FAILED",
         )
-        if not repository.save_if_generation(failed, claim.claim_generation):
+        if not repository.save_if_generation(failed, claim.claim_generation, now=clock.now()):
             current = repository.get(message.message_id)
             if current is None:
                 raise RuntimeError("CLAIM_LOST")
@@ -91,7 +91,7 @@ def consume_processing_message(
         completed_at=clock.now(),
         failure_code=None,
     )
-    if not repository.save_if_generation(completed, claim.claim_generation):
+    if not repository.save_if_generation(completed, claim.claim_generation, now=clock.now()):
         current = repository.get(message.message_id)
         if current is None:
             raise RuntimeError("CLAIM_LOST")
