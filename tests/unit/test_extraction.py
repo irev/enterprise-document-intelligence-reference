@@ -4,6 +4,7 @@ from edi_reference.application.extraction import extract_fields
 from edi_reference.domain.document_structure import BoundingBox, PageStructure, StructuredDocument, TextBlock
 from edi_reference.domain.evidence import EvidenceKind, EvidenceReference
 from edi_reference.domain.extraction import ExtractedField, FieldState
+from edi_reference.domain.field_schema import ExtractionSchema, FieldDefinition
 
 
 DOC = StructuredDocument(
@@ -12,6 +13,7 @@ DOC = StructuredDocument(
         TextBlock("b1", "Invoice INV-001 Total Rp 1.250.000,00", BoundingBox(.1,.1,.9,.2), 0),
     ), ()),), "layout", "1",
 )
+SCHEMA = ExtractionSchema("invoice", "1", (FieldDefinition("invoice_number", "string"),))
 EV = (EvidenceReference("obs-1", "a"*64, 1, EvidenceKind.TEXT_BLOCK, block_id="b1"),)
 
 
@@ -35,7 +37,7 @@ def field(name, state, raw=None, evidence=(), confidence=None, value_type="strin
 def test_present_field_preserves_raw_value_and_evidence_only():
     result = extract_fields(
         DOC, document_type="INVOICE",
-        extractor=Extractor([field("invoice_number", FieldState.PRESENT, "INV-001", EV, .98)]),
+        extractor=Extractor([field("invoice_number", FieldState.PRESENT, "INV-001", EV, .98)]), schema=SCHEMA,
     )
     assert result[0].raw_value == "INV-001"
     assert result[0].evidence == EV
@@ -60,7 +62,7 @@ def test_explicit_null_is_distinct_from_missing_and_requires_evidence():
 def test_duplicate_field_names_are_rejected():
     one = field("invoice_number", FieldState.PRESENT, "INV-001", EV)
     with pytest.raises(ValueError, match="DUPLICATE_FIELD_NAME"):
-        extract_fields(DOC, document_type="INVOICE", extractor=Extractor([one, one]))
+        extract_fields(DOC, document_type="INVOICE", extractor=Extractor([one, one]), schema=SCHEMA)
 
 
 def test_explicit_null_requires_observed_raw_marker():
@@ -75,3 +77,23 @@ def test_invalid_field_requires_raw_value_and_evidence():
         field("total_amount", FieldState.INVALID, raw=None, evidence=EV)
     with pytest.raises(ValueError, match="INVALID_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE"):
         field("total_amount", FieldState.INVALID, raw="Rp ???", evidence=())
+
+
+def test_pipeline_rejects_model_invented_field():
+    with pytest.raises(ValueError, match="FIELD_NOT_IN_EXTRACTION_SCHEMA"):
+        extract_fields(
+            DOC,
+            document_type="INVOICE",
+            extractor=Extractor([field("invented_field", FieldState.PRESENT, "x", EV)]),
+            schema=SCHEMA,
+        )
+
+
+def test_pipeline_rejects_field_type_mismatch():
+    with pytest.raises(ValueError, match="FIELD_VALUE_TYPE_MISMATCH"):
+        extract_fields(
+            DOC,
+            document_type="INVOICE",
+            extractor=Extractor([field("invoice_number", FieldState.PRESENT, "INV-001", EV, value_type="money")]),
+            schema=SCHEMA,
+        )
