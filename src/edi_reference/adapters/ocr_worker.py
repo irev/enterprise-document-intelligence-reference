@@ -26,10 +26,7 @@ class WorkerLimits:
 def _run_engine(factory: Callable[[], LocalOcrEngine], document_bytes: bytes, timeout_seconds: int, connection) -> None:
     try:
         output = factory().extract_text(document_bytes, timeout_seconds=timeout_seconds)
-        if not isinstance(output, bytes):
-            connection.send(("ERROR", "INVALID_OCR_ENGINE_OUTPUT"))
-        else:
-            connection.send(("OK", output))
+        connection.send(("OK", output))
     except BaseException:
         connection.send(("ERROR", "OCR_WORKER_FAILED"))
     finally:
