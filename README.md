@@ -69,8 +69,7 @@ This repository MUST NOT contain confidential corporate blueprints, source docum
 
 Private material may inform validation privately. Only generalized, sanitized, non-identifying implementation requirements or test cases may be committed.
 
-## Development
-
+## Installation\n\nUse [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Do not install ML provider dependencies into the core development environment.\n\n## Development\n
 Use an activated project virtual environment for development commands.
 
 The default suite installs development dependencies and runs the tests that do not require a live PostgreSQL DSN:
