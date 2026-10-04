@@ -11,7 +11,7 @@ class RefetchOutcome(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class ScopedObservation:
+class SourceObservation:
     observation_id: str
     document_id: str
     tenant_id: str
