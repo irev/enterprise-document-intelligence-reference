@@ -24,7 +24,12 @@ class InMemoryProcessingClaimRepository:
 
     def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         current = self.claims.get(claim.message_id)
-        if (\n            current is None\n            or current.claim_generation != expected_generation\n            or current.status is ProcessingClaimStatus.COMPLETED\n            or (current.status is ProcessingClaimStatus.CLAIMED and current.lease_until > now)\n        ):
+        if (
+            current is None
+            or current.claim_generation != expected_generation
+            or current.status is ProcessingClaimStatus.COMPLETED
+            or (current.status is ProcessingClaimStatus.CLAIMED and current.lease_until > now)
+        ):
             return False
         self.claims[claim.message_id] = claim
         return True
