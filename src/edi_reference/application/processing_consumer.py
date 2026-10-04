@@ -37,7 +37,6 @@ def renew_processing_lease(
     repository: ProcessingClaimRepository,
     clock: Clock,
     lease_seconds: int = 300,
-    lease_aware: bool = False,
 ) -> ProcessingClaim:
     """Renew only the currently owned claim generation while its lease is still live."""
     now = clock.now()
@@ -62,6 +61,7 @@ def consume_processing_message(
     clock: Clock,
     ids: IdGenerator,
     lease_seconds: int = 300,
+    lease_aware: bool = False,
 ) -> ProcessingClaim:
     if message.message_type != "PROCESS_DOCUMENT":
         raise ValueError("UNSUPPORTED_MESSAGE_TYPE")
