@@ -14,6 +14,7 @@ from edi_reference.domain.inbound import InboundRecord, InboundStatus, Processin
 from edi_reference.domain.ingestion import Clock, IdGenerator, SourcePolicy
 from edi_reference.domain.integration import InteractionContext
 from edi_reference.domain.source import SourceReference
+from edi_reference.application.security import validate_source_reference
 
 
 class InboundRepository(Protocol):
@@ -39,6 +40,8 @@ def receive_document(
     clock: Clock,
     ids: IdGenerator,
 ) -> InboundRecord:
+    validate_source_reference(source)
+
     if not context.request_id or not context.idempotency_key:
         raise ValueError("REQUEST_ID_AND_IDEMPOTENCY_KEY_REQUIRED")
 
