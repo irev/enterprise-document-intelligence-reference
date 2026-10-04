@@ -27,10 +27,10 @@ def test_validation_findings_round_trip_for_existing_result():
             cursor.execute(
                 """SELECT result_id,result_version
                    FROM processing.processing_result
-                   ORDER BY created_at LIMIT 1"""
+                   WHERE result_id='final-result' AND result_version='1'"""
             )
             parent = cursor.fetchone()
-            assert parent is not None, "integration database must contain a processing result"
+            assert parent == ("final-result", "1")
             result_id, result_version = parent
             cursor.execute(
                 """DELETE FROM processing.validation_result
