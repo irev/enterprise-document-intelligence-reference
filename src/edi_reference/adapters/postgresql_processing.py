@@ -93,6 +93,20 @@ class PostgreSqlProcessingClaimRepository:
                 )
                 return cursor.rowcount == 1
 
+    def try_renew_lease(self, message_id: str, expected_generation: int, *, now, lease_until) -> bool:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """UPDATE processing.processing_claim
+                       SET lease_until=%s
+                       WHERE message_id=%s
+                         AND claim_generation=%s
+                         AND status = 'CLAIMED'
+                         AND lease_until > %s""",
+                    (lease_until, message_id, expected_generation, now),
+                )
+                return cursor.rowcount == 1
+
     def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         with self._connect() as connection:
             with connection.cursor() as cursor:
