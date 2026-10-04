@@ -8,7 +8,14 @@ class ProviderConfigurationError(ValueError):
     pass
 
 
-class ProviderConfigurationRegistry:
+class ProviderConfigurationSource:
+    """Port for reading current trusted provider configuration."""
+
+    def get(self, provider_id: str) -> ProviderConfiguration | None:
+        raise NotImplementedError
+
+
+class ProviderConfigurationRegistry(ProviderConfigurationSource):
     def __init__(self, configurations: tuple[ProviderConfiguration, ...]):
         self._items: dict[str, ProviderConfiguration] = {}
         for item in configurations:
@@ -23,7 +30,7 @@ class ProviderConfigurationRegistry:
 def resolve_provider(
     capability: ProviderCapability,
     *,
-    configurations: ProviderConfigurationRegistry,
+    configurations: ProviderConfigurationSource,
     tenant_id: str,
     application_id: str,
 ) -> ResolvedProvider:
