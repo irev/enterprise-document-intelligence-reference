@@ -1,7 +1,7 @@
 """Validation of canonical structure emitted by parser/OCR adapters."""
 
 from edi_reference.domain.document_structure import PageStructure, StructuredDocument
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 class InvalidDocumentStructure(ValueError):
@@ -9,7 +9,7 @@ class InvalidDocumentStructure(ValueError):
 
 
 def validate_structured_document(
-    observation: ScopedObservation,
+    observation: SourceObservation,
     document: StructuredDocument,
 ) -> None:
     if document.observation_id != observation.observation_id:
