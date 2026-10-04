@@ -27,6 +27,7 @@ def seed(cursor, *, generation=1, lease_minutes=5):
     cursor.execute("DELETE FROM processing.processing_claim WHERE message_id='final-message'")
     cursor.execute("DELETE FROM processing.processing_run WHERE processing_run_id='final-run'")
     cursor.execute("DELETE FROM integration.outbox_message WHERE message_id='final-message'")
+    cursor.execute("DELETE FROM ingestion.inbound_request WHERE inbound_id='final-inbound'")
     cursor.execute("DELETE FROM ingestion.source_observation WHERE observation_id='final-observation'")
     cursor.execute("DELETE FROM ingestion.document WHERE document_id='final-document'")
     cursor.execute("DELETE FROM control_plane.application WHERE tenant_id='final-tenant'")
@@ -59,10 +60,19 @@ def seed(cursor, *, generation=1, lease_minutes=5):
         ("a" * 64, now),
     )
     cursor.execute(
+        """INSERT INTO ingestion.inbound_request
+           (inbound_id,tenant_id,application_id,correlation_id,request_id,
+            idempotency_key,request_fingerprint,source_method,status,received_at,
+            updated_at,observation_sha256)
+           VALUES ('final-inbound','final-tenant','final-app','corr','req',
+                   'idem-final',%s,'UPLOAD','ACCEPTED',%s,%s,%s)""",
+        ("f" * 64, now, now, "a" * 64),
+    )
+    cursor.execute(
         """INSERT INTO integration.outbox_message
            (message_id,tenant_id,application_id,correlation_id,aggregate_id,
             message_type,payload_ref,created_at,observation_id)
-           VALUES ('final-message','final-tenant','final-app','corr','final-document',
+           VALUES ('final-message','final-tenant','final-app','corr','final-inbound',
                    'PROCESS_DOCUMENT',%s,%s,'final-observation')""",
         ("sha256:" + "a" * 64, now),
     )
