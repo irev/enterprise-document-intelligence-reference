@@ -10,7 +10,7 @@ class Cursor:
 
     def fetchone(self):
         if "provider_configuration" in self.query:
-            return ("local-ocr", "cfg-2", False, "trusted-local", "paddle", None, None)
+            return ("local-ocr", "cfg-2", False, "trusted-local", "paddle", None, None, "ALLOWLIST", "ALLOWLIST")
         return None
 
     def fetchall(self):
@@ -45,3 +45,23 @@ def test_postgresql_source_returns_current_configuration_and_authorization():
     assert result.tenant_allowlist == frozenset({"tenant-a"})
     assert result.application_allowlist == frozenset({"app-a"})
     assert connection.closed
+
+
+def test_postgresql_source_preserves_unrestricted_authorization():
+    class UnrestrictedCursor(Cursor):
+        def fetchone(self):
+            if "provider_configuration" in self.query:
+                return ("local-ocr", "cfg-3", True, "trusted-local", "paddle", None, None, "UNRESTRICTED", "UNRESTRICTED")
+            return None
+
+        def fetchall(self):
+            return []
+
+    class UnrestrictedConnection(Connection):
+        def cursor(self):
+            return UnrestrictedCursor()
+
+    source = PostgreSqlProviderConfigurationSource(lambda: UnrestrictedConnection())
+    result = source.get("local-ocr")
+    assert result.tenant_allowlist is None
+    assert result.application_allowlist is None
