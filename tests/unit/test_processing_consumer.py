@@ -385,3 +385,34 @@ def test_lease_aware_signature_defect_fails_fast():
     assert persisted is not None
     assert persisted.status is ProcessingClaimStatus.CLAIMED
     assert persisted.failure_code is None
+
+
+
+def test_terminal_claims_cannot_renew_lease_in_memory():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+
+    for index, status in enumerate(
+        (ProcessingClaimStatus.COMPLETED, ProcessingClaimStatus.FAILED), start=1
+    ):
+        claim = ProcessingClaim(
+            message_id=f"terminal-renew-{index}",
+            processing_run_id=f"terminal-run-{index}",
+            tenant_id="tenant-a",
+            application_id="app-a",
+            observation_sha256="a" * 64,
+            status=status,
+            claimed_at=clock.now(),
+            lease_until=clock.now() + timedelta(minutes=5),
+            claim_generation=1,
+            completed_at=clock.now() if status is ProcessingClaimStatus.COMPLETED else None,
+            failure_code="PROCESSING_FAILED" if status is ProcessingClaimStatus.FAILED else None,
+        )
+        repo.save(claim)
+        assert repo.try_renew_lease(
+            claim.message_id,
+            claim.claim_generation,
+            now=clock.now(),
+            lease_until=clock.now() + timedelta(minutes=10),
+        ) is False
+        assert repo.get(claim.message_id) == claim
