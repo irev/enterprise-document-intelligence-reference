@@ -2,13 +2,14 @@
 
 from edi_reference.domain.document_structure import PageStructure, StructuredDocument, TextBlock
 from edi_reference.domain.ocr import OcrResult
+from edi_reference.domain.lineage import SourceObservation
+from edi_reference.application.structure import validate_structured_document
 
 
 def structured_ocr_to_document(
     result: OcrResult,
     *,
-    observation_id: str,
-    observation_sha256: str,
+    observation: SourceObservation,
     component: str,
     component_version: str,
 ) -> StructuredDocument:
@@ -31,10 +32,12 @@ def structured_ocr_to_document(
         )
         for page in result.pages
     )
-    return StructuredDocument(
-        observation_id=observation_id,
-        observation_sha256=observation_sha256,
+    document = StructuredDocument(
+        observation_id=observation.observation_id,
+        observation_sha256=observation.sha256,
         pages=pages,
         component=component,
         component_version=component_version,
     )
+    validate_structured_document(observation, document)
+    return document
