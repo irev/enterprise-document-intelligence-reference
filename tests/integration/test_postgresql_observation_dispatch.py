@@ -66,6 +66,23 @@ def test_processing_resolves_exact_observation_not_payload_digest():
                            'dispatch-app',%s,123,'application/pdf',%s)""",
                 ("a" * 64, now),
             )
+            cursor.execute(
+                """INSERT INTO ingestion.inbound_request
+                   (inbound_id, tenant_id, application_id, correlation_id, request_id,
+                    idempotency_key, request_fingerprint, source_method, status,
+                    received_at, updated_at, observation_sha256)
+                   VALUES ('dispatch-document','dispatch-tenant','dispatch-app','corr',
+                           'req-dispatch','idem-dispatch',%s,'UPLOAD','ACCEPTED',%s,%s,%s)""",
+                ("c" * 64, now, now, "a" * 64),
+            )
+            cursor.execute(
+                """INSERT INTO integration.outbox_message
+                   (message_id, tenant_id, application_id, correlation_id, aggregate_id,
+                    message_type, payload_ref, created_at, observation_id)
+                   VALUES ('dispatch-message','dispatch-tenant','dispatch-app','corr',
+                           'dispatch-document','PROCESS_DOCUMENT',%s,%s,'dispatch-observation')""",
+                ("sha256:" + "f" * 64, now),
+            )
 
     message = OutboxMessage(
         message_id="dispatch-message",
