@@ -81,7 +81,7 @@ For development plus PostgreSQL:
 python -m pip install -e ".[dev,postgres]"
 ```
 
-Use a disposable database for integration tests. See `docs/LOCAL-DEVELOPMENT.md` for migration and test commands.
+Use a disposable database for integration tests. See `README.md` (Development section) for migration and test commands.
 
 ## 4. Inspect provider installation
 
@@ -141,7 +141,9 @@ Installation state is written atomically to:
 
 State contains operational metadata and step return codes. Installer stdout/stderr is intentionally not persisted because package-manager output can contain sensitive repository information.
 
-A partial failure is recorded as `FAILED`; a successful install is recorded as `INSTALLED`.
+A partial failure is recorded as `FAILED`; a successful install is recorded as `READY`.
+
+Model provisioning can be part of the same install run: pass `--model <model_id>` to pull it immediately after the runtime reports `READY`, or run interactively on a TTY without `--model` to choose from a numbered catalog menu (press `q` to skip; non-interactive sessions without `--model` install the runtime only). See `docs/manual/cli-reference.md` for details.
 
 ## 6. Provision Paddle models
 
@@ -549,7 +551,7 @@ Before declaring a host ready:
 - core tests pass;
 - `edi doctor` matches the intended host;
 - the requested provider profile installs successfully;
-- `install-state.json` reports `INSTALLED`;
+- `install-state.json` reports `READY`;
 - required model operations report the expected governed state;
 - no provider silently falls back to a different execution class/profile;
 - production ProcessingProfile pins the intended provider/model configuration;

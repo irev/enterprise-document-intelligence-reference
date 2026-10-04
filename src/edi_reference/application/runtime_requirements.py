@@ -13,6 +13,9 @@ def provider_runtime_requirement(
     *,
     host_os: str,
 ) -> ProviderRuntimeRequirement:
+    if provider_id == "qwen3-vl":
+        return _qwen3_vl_requirement(profile)
+
     if provider_id != "paddle-ocr":
         raise ValueError("RUNTIME_REQUIREMENT_NOT_IMPLEMENTED")
 
@@ -41,3 +44,29 @@ def provider_runtime_requirement(
         )
 
     raise ValueError("UNSUPPORTED_PADDLE_PROFILE")
+
+
+def _qwen3_vl_requirement(profile: str) -> ProviderRuntimeRequirement:
+    if profile == "cpu":
+        return ProviderRuntimeRequirement(
+            provider_id="qwen3-vl",
+            profile=profile,
+            supported_os=frozenset({"linux", "windows", "darwin"}),
+            python_min=(3, 12),
+            python_max_exclusive=(3, 13),
+            accelerator=Accelerator.CPU,
+            environments=frozenset({RuntimeEnvironment.NATIVE}),
+        )
+
+    if profile in {"nvidia", "quantized"}:
+        return ProviderRuntimeRequirement(
+            provider_id="qwen3-vl",
+            profile=profile,
+            supported_os=frozenset({"linux", "windows"}),
+            python_min=(3, 12),
+            python_max_exclusive=(3, 13),
+            accelerator=Accelerator.NVIDIA,
+            environments=frozenset({RuntimeEnvironment.NATIVE}),
+        )
+
+    raise ValueError("UNSUPPORTED_QWEN3_VL_PROFILE")

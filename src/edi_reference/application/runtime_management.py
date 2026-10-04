@@ -6,8 +6,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from edi_reference.application.paddle_install import build_paddle_install_plan
+from edi_reference.application.paddle_install import InstallStep, build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
+from edi_reference.application.qwen3_vl_install import build_qwen3_vl_install_plan
 from edi_reference.application.runtime_bootstrap import CompatibilityStatus, ResolvedRuntime, RuntimeEnvironment
 from edi_reference.application.runtime_installer import (
     InstallExecutionResult,
@@ -79,6 +80,15 @@ class RuntimeManagementService:
                 {"name": step.name, "argv": list(step.argv)} for step in paddle.steps
             ]
             payload["verify_argv"] = list(paddle.verify_argv)
+        elif provider_id == "qwen3-vl":
+            qwen = build_qwen3_vl_install_plan(
+                python_executable=python_executable,
+                profile=profile,
+            )
+            payload["steps"] = [
+                {"name": step.name, "argv": list(step.argv)} for step in qwen.steps
+            ]
+            payload["verify_argv"] = list(qwen.verify_argv)
         return payload
 
     def install_provider(
@@ -90,7 +100,7 @@ class RuntimeManagementService:
         runtime_root: Path,
         resolved_runtime: ResolvedRuntime,
     ) -> InstallExecutionResult:
-        if provider_id != "paddle-ocr":
+        if provider_id not in {"paddle-ocr", "qwen3-vl"}:
             raise ValueError("INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER")
         if (
             resolved_runtime.status is not CompatibilityStatus.COMPATIBLE
@@ -119,14 +129,15 @@ class RuntimeManagementService:
             host=host,
             python_executable=python_executable,
         )
-        paddle = build_paddle_install_plan(
-            python_executable=python_executable,
+        plan_steps, plan_verify = self._install_plan(
+            provider_id=provider_id,
             profile=profile,
-            nvidia_driver_version=asdict(host).get("nvidia_driver_version"),
+            host=host,
+            python_executable=python_executable,
         )
         try:
-            steps = execute_steps(paddle.steps)
-            verification = verify_runtime(paddle.verify_argv)
+            steps = execute_steps(plan_steps)
+            verification = verify_runtime(plan_verify)
             python_version = query_python_version(python_path)
         except (InstallStepFailed, RuntimeError) as exc:
             failed = InstallExecutionResult(
@@ -152,3 +163,24 @@ class RuntimeManagementService:
         )
         write_install_state(runtime_dir, result)
         return result
+
+    def _install_plan(
+        self,
+        *,
+        provider_id: str,
+        profile: str,
+        host: Any,
+        python_executable: str,
+    ) -> tuple[tuple[InstallStep, ...], tuple[str, ...]]:
+        if provider_id == "qwen3-vl":
+            plan = build_qwen3_vl_install_plan(
+                python_executable=python_executable,
+                profile=profile,
+            )
+            return plan.steps, plan.verify_argv
+        paddle = build_paddle_install_plan(
+            python_executable=python_executable,
+            profile=profile,
+            nvidia_driver_version=asdict(host).get("nvidia_driver_version"),
+        )
+        return paddle.steps, paddle.verify_argv

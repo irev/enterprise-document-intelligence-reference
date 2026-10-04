@@ -13,6 +13,21 @@ required = false
 profiles = ["cpu", "nvidia"]
 models = ["pp-ocrv6-medium", "pp-ocrv5-server", "pp-structure-v3"]
 
+[providers.paddleocr-vl]
+capabilities = ["TEXT_EXTRACTION", "LAYOUT"]
+runtime_family = "paddle-vl"
+required = false
+profiles = ["cpu", "nvidia"]
+models = ["paddleocr-vl-1.6", "hpd-parsing"]
+
+[providers.qwen3-vl]
+capabilities = ["CLASSIFICATION", "FIELD_EXTRACTION"]
+runtime_family = "pytorch-transformers"
+required = false
+profiles = ["cpu", "nvidia", "quantized"]
+models = ["qwen3-vl-4b", "qwen3-vl-8b", "qwen3-vl-30b-a3b"]
+
+
 [providers.qwen25-vl-7b]
 capabilities = ["CLASSIFICATION", "FIELD_EXTRACTION"]
 runtime_family = "pytorch-transformers"

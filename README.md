@@ -71,7 +71,7 @@ Private material may inform validation privately. Only generalized, sanitized, n
 
 ## Installation
 
-Use [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Do not install ML provider dependencies into the core development environment.
+Use [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Usage guidance (quickstart, CLI reference, operations, troubleshooting index) lives in [`docs/manual/`](docs/manual/README.md). Do not install ML provider dependencies into the core development environment.
 
 ## Development
 
@@ -84,7 +84,27 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+With [uv](https://docs.astral.sh/uv/) installed, the CLI can also be run straight from
+the checkout without activating a virtual environment: `uvx --from . edi doctor`
+(also `uvx --with ".[dev]" pytest`, or `uv tool install .` for a global `edi`).
+
 PostgreSQL integration tests are conditional. If `EDI_TEST_POSTGRES_DSN` is not set, those tests are **skipped**; a default-suite success therefore does not by itself prove the durable PostgreSQL layer.
+
+### Running the tests in Docker (WSL/Linux)
+
+A containerized run builds the same suite on a clean Python 3.12 image — useful on
+Windows through WSL2:
+
+```bash
+# inside WSL (or any Linux host with Docker)
+scripts/test-docker.sh                                  # python -m pytest
+scripts/test-docker.sh python -m ruff check src tests   # lint
+scripts/test-docker.sh python -m mypy src/edi_reference # typecheck
+```
+
+From Windows: `wsl -d Ubuntu-22.04 -- bash /mnt/<drive>/repo/<repo>/scripts/test-docker.sh`.
+The image is defined by `Dockerfile`; `.dockerignore` keeps `.venv`, `.edi`, and caches
+out of the build context.
 
 To run the PostgreSQL layer, install the adapter, point `EDI_TEST_POSTGRES_DSN` at a disposable test database, apply migrations through the versioned runner, then run the integration suite:
 
@@ -123,7 +143,9 @@ A machine-wide/default Python (for example a newer Python release) may resolve a
 
 See `AGENTS.md` before making architecture or contract changes.
 
-The implementation is intended to operate as a shared service for multiple authorized consumer applications. See `docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md`.## Installation
+The implementation is intended to operate as a shared service for multiple authorized consumer applications. See `docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md`.
+
+## Installation
 
 The core and ML provider runtimes are intentionally isolated. Do **not** install PaddlePaddle/PaddleOCR or other model stacks into the core `.venv`.
 

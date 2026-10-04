@@ -1,0 +1,31 @@
+# Code-owned VRAM tier map. Advisory only: it documents which profiles, models
+# and local inference servers are reasonable for a host; it never selects or
+# authorizes execution paths. Values are upper bounds inclusive.
+
+schema_version = "1"
+
+[tier.cpu]
+vram_mib_max = 8191
+profiles = ["paddle-ocr/cpu"]
+models = ["pp-ocrv6-medium"]
+serve = ["ollama", "lmstudio"]
+
+[tier.gpu-low]
+vram_mib_min = 8192
+vram_mib_max = 12287
+profiles = ["paddle-ocr/cpu", "paddle-ocr/nvidia"]
+models = ["pp-ocrv6-medium"]
+serve = ["ollama", "lmstudio"]
+
+[tier.gpu-mid]
+vram_mib_min = 12288
+vram_mib_max = 20479
+profiles = ["paddle-ocr/cpu", "paddle-ocr/nvidia", "paddleocr-vl/cpu", "paddleocr-vl/nvidia"]
+models = ["pp-ocrv6-medium", "paddleocr-vl-1.6", "qwen3-vl-4b"]
+serve = ["ollama", "lmstudio"]
+
+[tier.gpu-high]
+vram_mib_min = 20480
+profiles = ["paddle-ocr/nvidia", "paddleocr-vl/nvidia", "qwen3-vl/cpu", "qwen3-vl/nvidia", "qwen3-vl/quantized"]
+models = ["pp-ocrv6-medium", "paddleocr-vl-1.6", "qwen3-vl-8b", "qwen3-vl-30b-a3b"]
+serve = ["ollama", "lmstudio", "vllm"]
