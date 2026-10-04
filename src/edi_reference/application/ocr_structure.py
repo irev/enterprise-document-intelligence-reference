@@ -2,13 +2,14 @@
 
 from edi_reference.domain.document_structure import BoundingBox, PageStructure, StructuredDocument, TextBlock
 from edi_reference.domain.invocation import InvocationResult
+from edi_reference.domain.lineage import SourceObservation
+from edi_reference.application.structure import validate_structured_document
 
 
 def ocr_text_to_structure(
     result: InvocationResult,
     *,
-    observation_id: str,
-    observation_sha256: str,
+    observation: SourceObservation,
     component: str,
     component_version: str,
 ) -> StructuredDocument:
@@ -30,10 +31,12 @@ def ocr_text_to_structure(
     if not blocks:
         raise ValueError("OCR_OUTPUT_EMPTY")
 
-    return StructuredDocument(
-        observation_id=observation_id,
-        observation_sha256=observation_sha256,
+    document = StructuredDocument(
+        observation_id=observation.observation_id,
+        observation_sha256=observation.sha256,
         pages=(PageStructure(1, 1.0, 1.0, blocks, ()),),
         component=component,
         component_version=component_version,
     )
+    validate_structured_document(observation, document)
+    return document
