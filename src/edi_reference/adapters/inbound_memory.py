@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from edi_reference.domain.inbound import InboundRecord, ProcessingDispatch
 from edi_reference.domain.outbox import OutboxMessage
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 @dataclass
@@ -38,11 +38,11 @@ class InMemoryAtomicAcceptanceStore:
 
     repository: InMemoryInboundRepository
     outbox: dict[str, OutboxMessage] = field(default_factory=dict)
-    observations: dict[str, ScopedObservation] = field(default_factory=dict)
+    observations: dict[str, SourceObservation] = field(default_factory=dict)
     fail_before_commit: bool = False
 
     def accept_and_enqueue(
-        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+        self, record: InboundRecord, observation: SourceObservation, message: OutboxMessage
     ) -> None:
         if self.fail_before_commit:
             raise RuntimeError("ATOMIC_ACCEPTANCE_FAILED")
