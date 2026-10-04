@@ -23,7 +23,8 @@ class PostgreSqlProviderConfigurationSource(ProviderConfigurationSource):
                 cursor.execute(
                     """
                     SELECT provider_id, config_version, enabled, deployment_zone,
-                           engine_ref, secret_ref, endpoint_ref
+                           engine_ref, secret_ref, endpoint_ref,
+                           tenant_access_mode, application_access_mode
                     FROM control_plane.provider_configuration
                     WHERE provider_id = %s
                     """,
@@ -42,7 +43,8 @@ class PostgreSqlProviderConfigurationSource(ProviderConfigurationSource):
                     """,
                     (provider_id,),
                 )
-                tenant_allowlist = frozenset(item[0] for item in cursor.fetchall())
+                tenant_rows = frozenset(item[0] for item in cursor.fetchall())
+                tenant_allowlist = None if row[7] == "UNRESTRICTED" else tenant_rows
 
                 cursor.execute(
                     """
@@ -53,7 +55,8 @@ class PostgreSqlProviderConfigurationSource(ProviderConfigurationSource):
                     """,
                     (provider_id,),
                 )
-                application_allowlist = frozenset(item[0] for item in cursor.fetchall())
+                application_rows = frozenset(item[0] for item in cursor.fetchall())
+                application_allowlist = None if row[8] == "UNRESTRICTED" else application_rows
 
                 return ProviderConfiguration(
                     provider_id=row[0],
