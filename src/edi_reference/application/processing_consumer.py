@@ -16,6 +16,7 @@ class ProcessingClaimRepository(Protocol):
     def save(self, claim: ProcessingClaim) -> None: ...
     def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
     def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool: ...
+    def try_renew_lease(self, message_id: str, expected_generation: int, *, now, lease_until) -> bool: ...
 
 
 class ObservationRepository(Protocol):
@@ -24,6 +25,27 @@ class ObservationRepository(Protocol):
 
 class DocumentProcessor(Protocol):
     def process(self, claim: ProcessingClaim) -> None: ...
+
+
+def renew_processing_lease(
+    claim: ProcessingClaim,
+    *,
+    repository: ProcessingClaimRepository,
+    clock: Clock,
+    lease_seconds: int = 300,
+) -> ProcessingClaim:
+    """Renew only the currently owned claim generation while its lease is still live."""
+    now = clock.now()
+    lease_until = now + timedelta(seconds=lease_seconds)
+    if not repository.try_renew_lease(
+        claim.message_id,
+        claim.claim_generation,
+        now=now,
+        lease_until=lease_until,
+    ):
+        raise RuntimeError("CLAIM_LEASE_LOST")
+    return replace(claim, lease_until=lease_until)
+
 
 
 def consume_processing_message(
