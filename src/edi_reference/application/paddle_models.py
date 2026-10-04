@@ -44,6 +44,7 @@ class ModelArtifactState:
     model_id: str
     source: str
     artifact_dir: str
+    storage: str
     status: str
     manifest_sha256: str
 
@@ -123,7 +124,8 @@ def warm_paddle_model(
         model_id=model_id,
         source=source,
         artifact_dir=str(artifact_dir),
-        status="READY",
+        storage="UPSTREAM_CACHE",
+        status="WARMED",
         manifest_sha256=digest,
     )
     _write_state(artifact_dir, state)
