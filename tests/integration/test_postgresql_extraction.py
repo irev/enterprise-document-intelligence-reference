@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from edi_reference.adapters.postgresql_extraction import PostgreSqlExtractedFieldRepository
