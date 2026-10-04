@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
+from edi_reference.application.runtime_installer import (
+    InstallExecutionResult,
+    ensure_runtime_venv,
+    execute_steps,
+    write_install_state,
+)
 
 
 class RuntimeManagementService:
@@ -40,7 +46,7 @@ class RuntimeManagementService:
         provider_id: str,
         profile: str,
         host: Any,
-        python_executable: str = sys.executable,
+        python_executable: str,
     ) -> dict[str, object]:
         definition = self._manifest.providers.get(provider_id)
         if definition is None:
@@ -70,3 +76,37 @@ class RuntimeManagementService:
             payload["steps"] = [{"name": step.name, "argv": list(step.argv)} for step in paddle.steps]
             payload["verify_argv"] = list(paddle.verify_argv)
         return payload
+
+    def install_provider(
+        self,
+        *,
+        provider_id: str,
+        profile: str,
+        host: Any,
+        runtime_root: Path,
+    ) -> InstallExecutionResult:
+        if provider_id != "paddle-ocr":
+            raise ValueError("INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER")
+        runtime_dir = runtime_root / provider_id / profile
+        python_executable = str(ensure_runtime_venv(runtime_dir))
+        plan = self.plan_install(
+            provider_id=provider_id,
+            profile=profile,
+            host=host,
+            python_executable=python_executable,
+        )
+        paddle = build_paddle_install_plan(
+            python_executable=python_executable,
+            profile=profile,
+            nvidia_driver_version=asdict(host).get("nvidia_driver_version"),
+        )
+        steps = execute_steps(paddle.steps)
+        result = InstallExecutionResult(
+            provider_id=provider_id,
+            profile=profile,
+            runtime_dir=str(runtime_dir),
+            status="INSTALLED",
+            steps=steps,
+        )
+        write_install_state(runtime_dir, result)
+        return result
