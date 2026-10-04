@@ -103,3 +103,50 @@ def test_matching_generation_cannot_finalize_after_lease_expiry():
     persisted = repo.get(active.message_id)
     assert persisted.status is ProcessingClaimStatus.CLAIMED
     assert persisted.claim_generation == active.claim_generation
+
+
+def test_postgresql_active_lease_can_be_renewed_with_matching_generation():
+    now = datetime.now(UTC)
+    repo = PostgreSqlProcessingClaimRepository(connect)
+    current = repo.get("claim-message")
+    assert current is not None
+
+    active = ProcessingClaim(
+        current.message_id, current.processing_run_id, current.tenant_id,
+        current.application_id, current.observation_sha256,
+        ProcessingClaimStatus.CLAIMED, now,
+        now + timedelta(minutes=1), current.claim_generation + 1,
+    )
+    repo.save(active)
+    extended_until = now + timedelta(minutes=5)
+    assert repo.try_renew_lease(
+        active.message_id, active.claim_generation,
+        now=now, lease_until=extended_until,
+    )
+    renewed = repo.get(active.message_id)
+    assert renewed.lease_until == extended_until
+    assert renewed.claim_generation == active.claim_generation
+
+
+def test_postgresql_lease_renewal_rejects_stale_generation_and_expired_lease():
+    now = datetime.now(UTC)
+    repo = PostgreSqlProcessingClaimRepository(connect)
+    current = repo.get("claim-message")
+    assert current is not None
+
+    active = ProcessingClaim(
+        current.message_id, current.processing_run_id, current.tenant_id,
+        current.application_id, current.observation_sha256,
+        ProcessingClaimStatus.CLAIMED, now,
+        now + timedelta(minutes=1), current.claim_generation + 1,
+    )
+    repo.save(active)
+    assert repo.try_renew_lease(
+        active.message_id, active.claim_generation - 1,
+        now=now, lease_until=now + timedelta(minutes=5),
+    ) is False
+    after_expiry = active.lease_until + timedelta(seconds=1)
+    assert repo.try_renew_lease(
+        active.message_id, active.claim_generation,
+        now=after_expiry, lease_until=after_expiry + timedelta(minutes=5),
+    ) is False
