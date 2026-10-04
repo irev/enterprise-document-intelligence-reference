@@ -44,6 +44,7 @@ def message():
         message_type="PROCESS_DOCUMENT",
         payload_ref="sha256:" + "a" * 64,
         created_at=Clock().now(),
+        observation_id="obs-1",
     )
 
 
@@ -130,3 +131,37 @@ def test_stale_worker_cannot_overwrite_newer_claim_generation():
     )
     assert repo.save_if_generation(stale_completion, 7, now=now) is False
     assert repo.get("msg-1") == newer
+
+
+def test_processing_requires_observation_identity():
+    msg = message()
+    without_observation = OutboxMessage(
+        message_id=msg.message_id,
+        tenant_id=msg.tenant_id,
+        application_id=msg.application_id,
+        correlation_id=msg.correlation_id,
+        aggregate_id=msg.aggregate_id,
+        message_type=msg.message_type,
+        payload_ref=msg.payload_ref,
+        created_at=msg.created_at,
+    )
+    import pytest
+    with pytest.raises(ValueError, match="OBSERVATION_ID_REQUIRED"):
+        consume_processing_message(
+            without_observation,
+            repository=InMemoryProcessingClaimRepository(),
+            processor=Processor(),
+            clock=Clock(),
+            ids=Ids(),
+        )
+
+
+def test_processing_claim_carries_observation_identity():
+    result = consume_processing_message(
+        message(),
+        repository=InMemoryProcessingClaimRepository(),
+        processor=Processor(),
+        clock=Clock(),
+        ids=Ids(),
+    )
+    assert result.observation_id == "obs-1"
