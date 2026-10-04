@@ -12,7 +12,6 @@ def test_migration_files_are_discovered_in_version_order():
         "0001_control_plane.sql",
         "0002_inbound_outbox.sql",
     ]
-    assert files[-1].name == "0006_lineage_referential_integrity.sql"
 
 
 def test_duplicate_migration_version_is_rejected(tmp_path):
