@@ -31,8 +31,11 @@ class IsoDateNormalizer:
     value_type = "date"
 
     def normalize(self, raw_value: str) -> str:
+        value = raw_value.strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise NormalizationError("INVALID_DATE_FORMAT")
         try:
-            return date.fromisoformat(raw_value.strip()).isoformat()
+            return date.fromisoformat(value).isoformat()
         except ValueError:
             raise NormalizationError("INVALID_DATE_FORMAT") from None
 
