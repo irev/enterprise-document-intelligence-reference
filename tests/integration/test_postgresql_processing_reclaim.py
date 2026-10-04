@@ -62,6 +62,20 @@ def test_only_one_worker_can_reclaim_same_generation():
         ProcessingClaimStatus.CLAIMED, now, now + timedelta(minutes=5), 5,
     )
 
-    assert repo.try_reclaim(worker_a, 4) is True
-    assert repo.try_reclaim(worker_b, 4) is False
+    assert repo.try_reclaim(worker_a, 4, now=now) is True
+    assert repo.try_reclaim(worker_b, 4, now=now) is False
     assert repo.get("cas-message").claim_generation == 5
+
+
+def test_active_lease_cannot_be_reclaimed_even_with_matching_generation():
+    now = datetime.now(UTC)
+    repo = PostgreSqlProcessingClaimRepository(connect)
+    current = repo.get("cas-message")
+    assert current is not None
+    active = ProcessingClaim(
+        current.message_id, current.processing_run_id, current.tenant_id,
+        current.application_id, current.observation_sha256,
+        ProcessingClaimStatus.CLAIMED, now, now + timedelta(minutes=5),
+        current.claim_generation + 1,
+    )
+    assert repo.try_reclaim(active, current.claim_generation, now=now) is False
