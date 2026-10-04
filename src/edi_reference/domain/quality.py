@@ -45,6 +45,16 @@ class OcrDecisionPolicy:
     image_dominance_threshold: float
     uncertain_margin: float = 0.05
 
+    def __post_init__(self) -> None:
+        if self.min_native_characters < 0:
+            raise ValueError("INVALID_OCR_MIN_NATIVE_CHARACTERS")
+        if not 0.0 <= self.min_native_text_coverage <= 1.0:
+            raise ValueError("INVALID_OCR_TEXT_COVERAGE_THRESHOLD")
+        if not 0.0 <= self.image_dominance_threshold <= 1.0:
+            raise ValueError("INVALID_OCR_IMAGE_DOMINANCE_THRESHOLD")
+        if not 0.0 <= self.uncertain_margin <= 1.0:
+            raise ValueError("INVALID_OCR_UNCERTAIN_MARGIN")
+
 
 @dataclass(frozen=True, slots=True)
 class PageOcrAssessment:
