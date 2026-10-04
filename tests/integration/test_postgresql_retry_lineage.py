@@ -8,7 +8,7 @@ from edi_reference.adapters.postgresql_lineage import PostgreSqlObservationRepos
 from edi_reference.application.acquisition_lineage import record_acquisition
 from edi_reference.application.retry import RetryAction, orchestrate_retry
 from edi_reference.domain.acquisition_lineage import AcquisitionStatus, SourceAcquisition
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 from edi_reference.domain.source import AcquisitionMethod, ProcessingIntent
 
 DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
@@ -51,7 +51,7 @@ def test_acquisition_and_refetch_reprocess_are_durable():
             )
 
     observations = PostgreSqlObservationRepository(connect)
-    current = ScopedObservation(
+    current = SourceObservation(
         "observation-current", "retry-document", "retry-tenant", "retry-app",
         "d" * 64, 100, "application/pdf", datetime.now(UTC), "v1",
     )
