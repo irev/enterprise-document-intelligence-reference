@@ -9,6 +9,8 @@ import shutil
 import subprocess
 from dataclasses import asdict, dataclass
 
+from edi_reference.application.provider_manifest import load_provider_manifest
+
 
 @dataclass(frozen=True, slots=True)
 class HostInfo:
@@ -18,13 +20,6 @@ class HostInfo:
     nvidia_smi: bool
 
 
-_PROVIDERS = {
-    "paddle-ocr": ("cpu", "nvidia"),
-    "qwen25-vl-7b": ("cpu", "nvidia", "quantized"),
-    "qwen25-vl-3b": ("cpu", "nvidia"),
-    "docling": ("cpu", "accelerator"),
-    "surya": ("cpu", "nvidia", "mps"),
-}
 
 
 def inspect_host() -> HostInfo:
@@ -54,9 +49,10 @@ def _nvidia_summary() -> str | None:
 
 
 def resolve_install(provider: str, profile: str, host: HostInfo) -> dict[str, object]:
-    profiles = _PROVIDERS.get(provider)
-    if profiles is None:
+    definition = load_provider_manifest().providers.get(provider)
+    if definition is None:
         raise ValueError("UNKNOWN_PROVIDER")
+    profiles = definition.profiles
     if profile not in profiles:
         raise ValueError("UNSUPPORTED_PROVIDER_PROFILE")
     if profile == "nvidia" and not host.nvidia_smi:
@@ -83,7 +79,7 @@ def _parser() -> argparse.ArgumentParser:
     provider_commands.add_parser("list")
 
     install = commands.add_parser("install")
-    install.add_argument("--provider", required=True, choices=sorted(_PROVIDERS))
+    install.add_argument("--provider", required=True)
     install.add_argument("--profile", required=True)
     install.add_argument("--dry-run", action="store_true")
     return parser
@@ -100,8 +96,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "providers":
-        for provider, profiles in _PROVIDERS.items():
-            print(f"{provider}: {', '.join(profiles)}")
+        for provider, definition in load_provider_manifest().providers.items():
+            print(f"{provider}: {', '.join(definition.profiles)}")
         return 0
 
     if args.command == "install":
