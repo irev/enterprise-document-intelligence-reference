@@ -38,3 +38,30 @@ def test_cli_install_requires_explicit_confirmation(capsys) -> None:
 
     assert result == 2
     assert "INSTALL_CONFIRMATION_REQUIRED_USE_YES" in capsys.readouterr().out
+
+
+def test_cli_dry_run_rejects_windows_nvidia_before_planning(monkeypatch, capsys) -> None:
+    from edi_reference.application.runtime_bootstrap import HostCapabilities, PythonInterpreter
+    from pathlib import Path
+
+    monkeypatch.setattr(
+        "edi_reference.cli.inspect_host",
+        lambda: HostInfo("windows", "amd64", False, True, (616, 92, 0)),
+    )
+    monkeypatch.setattr(
+        "edi_reference.cli.inspect_host_capabilities",
+        lambda **_: HostCapabilities(
+            os="windows",
+            architecture="amd64",
+            python_interpreters=(PythonInterpreter(Path("C:/Python312/python.exe"), (3, 12, 0)),),
+            nvidia=True,
+            nvidia_driver_version=(616, 92, 0),
+        ),
+    )
+
+    result = main(
+        ["install", "--provider", "paddle-ocr", "--profile", "nvidia", "--dry-run"]
+    )
+
+    assert result == 2
+    assert "PADDLE_NVIDIA_REQUIRES_LINUX_RUNTIME" in capsys.readouterr().out
