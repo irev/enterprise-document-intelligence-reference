@@ -6,11 +6,11 @@ from edi_reference.application.structure import InvalidDocumentStructure, valida
 from edi_reference.domain.document_structure import (
     BoundingBox, PageStructure, StructuredDocument, TableBlock, TableCell, TextBlock,
 )
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 
 def obs():
-    return ScopedObservation(
+    return SourceObservation(
         observation_id="obs-1", document_id="doc-1", tenant_id="tenant-a",
         application_id="app-a", sha256="a" * 64, byte_length=10,
         detected_media_type="application/pdf", observed_at=datetime(2026, 10, 4, tzinfo=UTC),
