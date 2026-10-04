@@ -92,3 +92,41 @@ def test_failure_stores_stable_code_not_exception_detail():
     result = consume_processing_message(message(), repository=repo, processor=processor, clock=Clock(), ids=Ids())
     assert result.status is ProcessingClaimStatus.FAILED
     assert result.failure_code == "PROCESSING_FAILED"
+
+
+def test_reclaim_advances_generation():
+    clock = Clock()
+    repo = InMemoryProcessingClaimRepository()
+    repo.save(ProcessingClaim(
+        message_id="msg-1", processing_run_id="run-existing",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=clock.now() - timedelta(minutes=10),
+        lease_until=clock.now() - timedelta(minutes=5),
+        claim_generation=7,
+    ))
+    result = consume_processing_message(message(), repository=repo, processor=Processor(), clock=clock, ids=Ids())
+    assert result.status is ProcessingClaimStatus.COMPLETED
+    assert result.claim_generation == 8
+
+
+def test_stale_worker_cannot_overwrite_newer_claim_generation():
+    repo = InMemoryProcessingClaimRepository()
+    now = Clock().now()
+    newer = ProcessingClaim(
+        message_id="msg-1", processing_run_id="run-existing",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.CLAIMED,
+        claimed_at=now, lease_until=now + timedelta(minutes=5),
+        claim_generation=8,
+    )
+    repo.save(newer)
+    stale_completion = ProcessingClaim(
+        message_id="msg-1", processing_run_id="run-existing",
+        tenant_id="tenant-a", application_id="app-a",
+        observation_sha256="a" * 64, status=ProcessingClaimStatus.COMPLETED,
+        claimed_at=now - timedelta(minutes=10), lease_until=now - timedelta(minutes=5),
+        claim_generation=7, completed_at=now,
+    )
+    assert repo.save_if_generation(stale_completion, 7) is False
+    assert repo.get("msg-1") == newer
