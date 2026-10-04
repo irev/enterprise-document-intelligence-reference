@@ -36,7 +36,7 @@ def test_warm_records_upstream_cache_without_claiming_local_weights(
     def run(*args, **kwargs):
         payload = json.loads(args[0][-1])
         artifact = Path(payload["artifact_dir"])
-        artifact.mkdir(parents=True)
+        artifact.mkdir(parents=True, exist_ok=True)
         (artifact / "resolved-model.json").write_text(
             json.dumps({"model_id": payload["model_id"], "names": payload["names"]}),
             encoding="utf-8",
@@ -59,7 +59,7 @@ def test_verify_detects_manifest_tampering(tmp_path: Path, monkeypatch: pytest.M
     def run(*args, **kwargs):
         payload = json.loads(args[0][-1])
         artifact = Path(payload["artifact_dir"])
-        artifact.mkdir(parents=True)
+        artifact.mkdir(parents=True, exist_ok=True)
         (artifact / "resolved-model.json").write_text("{}", encoding="utf-8")
         return Mock(returncode=0, stdout="", stderr="")
 
