@@ -20,8 +20,6 @@ from edi_reference.application.paddle_install import InstallStep
 class StepResult:
     name: str
     returncode: int
-    stdout: str
-    stderr: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +29,14 @@ class InstallExecutionResult:
     runtime_dir: str
     status: str
     steps: tuple[StepResult, ...]
+    error_code: str | None = None
+
+
+class InstallStepFailed(RuntimeError):
+    def __init__(self, step: str, results: tuple[StepResult, ...]) -> None:
+        super().__init__(f"INSTALL_STEP_FAILED:{step}")
+        self.step = step
+        self.results = results
 
 
 def runtime_python(runtime_dir: Path) -> Path:
@@ -62,15 +68,10 @@ def execute_steps(
             timeout=timeout_seconds,
             shell=False,
         )
-        result = StepResult(
-            name=step.name,
-            returncode=completed.returncode,
-            stdout=completed.stdout,
-            stderr=completed.stderr,
-        )
+        result = StepResult(name=step.name, returncode=completed.returncode)
         results.append(result)
         if completed.returncode != 0:
-            raise RuntimeError(f"INSTALL_STEP_FAILED:{step.name}")
+            raise InstallStepFailed(step.name, tuple(results))
     return tuple(results)
 
 
@@ -79,7 +80,7 @@ def write_install_state(runtime_dir: Path, result: InstallExecutionResult) -> No
     payload = {
         **asdict(result),
         "recorded_at": datetime.now(UTC).isoformat(),
-        "python": sys.version,
+        "orchestrator_python": sys.version.split()[0],
     }
     runtime_dir.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".install-state-", suffix=".json", dir=runtime_dir)
