@@ -8,7 +8,7 @@ from typing import Any
 
 from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
-from edi_reference.application.runtime_bootstrap import (\n    CompatibilityStatus,\n    ResolvedRuntime,\n    RuntimeEnvironment,\n)
+from edi_reference.application.runtime_bootstrap import CompatibilityStatus, ResolvedRuntime, RuntimeEnvironment
 from edi_reference.application.runtime_installer import (
     InstallExecutionResult,
     InstallStepFailed,
@@ -97,6 +97,7 @@ class RuntimeManagementService:
             or resolved_runtime.provider_id != provider_id
             or resolved_runtime.profile != profile
             or resolved_runtime.python is None
+            or resolved_runtime.environment is not RuntimeEnvironment.NATIVE
         ):
             raise ValueError("COMPATIBLE_RUNTIME_RESOLUTION_REQUIRED")
 
