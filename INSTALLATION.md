@@ -240,19 +240,220 @@ Do not combine all ML providers into one Python environment to save disk space. 
 
 GPU acceleration is optional. Core platform correctness MUST NOT depend on GPU availability.
 
-## 9. Windows, WSL2, Linux, and macOS
+## 9. Operating-system installation
 
-The core is cross-platform and CI-tested on Windows, Linux, and macOS.
+The core is cross-platform and CI-tested on Windows, Linux, and macOS. Provider support is a separate capability: a supported core OS does not imply that every ML accelerator is supported on that OS.
 
-For ML providers:
+| Host | Core | Paddle CPU | Paddle NVIDIA | Recommended use |
+|---|---|---|---|---|
+| Windows 11 native | supported | provider-dependent | verify upstream/runtime compatibility first | development and administration |
+| Windows 11 + WSL2 Ubuntu | supported inside Linux guest | supported when runtime recipe resolves | preferred Windows NVIDIA path when GPU passthrough is healthy | GPU development/workstation |
+| Ubuntu/Debian Linux | supported | supported when runtime recipe resolves | preferred GPU deployment target | production |
+| RHEL/Rocky/AlmaLinux | supported | supported when compatible Python/runtime is supplied | provider/runtime-dependent | enterprise Linux |
+| macOS Intel | supported | provider-dependent | not applicable | core development |
+| macOS Apple Silicon | supported | provider-dependent | not applicable | core development; provider acceleration evaluated separately |
+| Docker Linux | supported deployment boundary | supported image/profile | preferred with NVIDIA Container Toolkit when enabled | reproducible production |
 
-- Linux is the preferred production/container GPU target.
-- Windows may use a supported native provider runtime or an isolated WSL2/Docker deployment.
-- WSL2 is a valid Linux deployment boundary when NVIDIA GPU passthrough is configured.
-- macOS remains a supported core target; provider acceleration depends on the individual provider.
-- Never assume that identical accelerator profiles are available on every OS.
+Always run `edi doctor` on the actual execution host. Never select an accelerator profile based only on the development machine.
 
-Use `edi doctor` on the actual execution host. Do not select a GPU profile from development-machine assumptions.
+### 9.1 Windows 11 native
+
+Use PowerShell and a dedicated Python 3.12 core environment:
+
+```powershell
+git clone <repository>
+cd enterprise-document-intelligence-reference
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+Install the Paddle CPU profile only after inspecting the plan:
+
+```powershell
+edi install --provider paddle-ocr --profile cpu --dry-run
+edi install --provider paddle-ocr --profile cpu --yes
+edi models pull pp-ocrv6-medium --profile cpu --yes
+edi models verify pp-ocrv6-medium
+```
+
+Do not assume that native Windows NVIDIA installation is equivalent to Linux CUDA installation. The installer MUST fail closed when it cannot resolve a supported host/runtime combination. Prefer WSL2 or Docker for NVIDIA workloads when native provider compatibility is uncertain.
+
+### 9.2 Windows 11 with WSL2
+
+Install/enable WSL2 and an Ubuntu distribution using the normal Windows administration process. Inside the Linux guest, verify the environment rather than assuming Windows host capability is inherited:
+
+```bash
+uname -a
+python3 --version
+nvidia-smi
+```
+
+Then bootstrap the repository inside the Linux filesystem:
+
+```bash
+git clone <repository>
+cd enterprise-document-intelligence-reference
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+For NVIDIA, inspect the resolved plan first:
+
+```bash
+edi install --provider paddle-ocr --profile nvidia --dry-run
+edi install --provider paddle-ocr --profile nvidia --yes
+edi models pull pp-ocrv6-medium --profile nvidia --yes
+edi models verify pp-ocrv6-medium
+```
+
+If `nvidia-smi` is unavailable inside WSL2, correct GPU passthrough/driver configuration before attempting the NVIDIA profile. Do not install arbitrary CUDA/Paddle packages into the core `.venv` as a workaround.
+
+### 9.3 Ubuntu / Debian Linux
+
+Install the operating-system prerequisites using the distribution package manager. Exact Python package names vary by release; the required project interpreter is Python 3.12 compatible with project metadata.
+
+Example after Python/Git are available:
+
+```bash
+git clone <repository>
+cd enterprise-document-intelligence-reference
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+CPU:
+
+```bash
+edi install --provider paddle-ocr --profile cpu --dry-run
+edi install --provider paddle-ocr --profile cpu --yes
+edi models pull pp-ocrv6-medium --profile cpu --yes
+```
+
+NVIDIA:
+
+```bash
+nvidia-smi
+edi install --provider paddle-ocr --profile nvidia --dry-run
+edi install --provider paddle-ocr --profile nvidia --yes
+edi models pull pp-ocrv6-medium --profile nvidia --yes
+```
+
+Linux is the preferred production/container GPU target. Host NVIDIA driver installation remains an infrastructure responsibility; the EDI installer provisions the isolated provider runtime, not the host kernel driver.
+
+### 9.4 RHEL / Rocky Linux / AlmaLinux
+
+Do not copy Debian `apt` commands to RPM-based systems. Provision Git, Python 3.12, Python venv support, compiler/system libraries when required, and PostgreSQL client/development dependencies through the organization's approved repositories.
+
+Once a compatible interpreter exists, the application bootstrap remains:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+Provider installation then uses the same governed `edi install --dry-run` and `edi install --yes` workflow. NVIDIA host-driver/repository configuration MUST follow the enterprise Linux platform policy and the provider's supported compatibility matrix.
+
+### 9.5 macOS Intel
+
+Bootstrap the core with a Python 3.12 interpreter supplied by the organization's approved package manager/runtime manager:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+macOS Intel is a supported core-development target. Do not select the `nvidia` profile. Paddle/provider installation is conditional on upstream support for the exact macOS/Python combination.
+
+### 9.6 macOS Apple Silicon
+
+Use a native ARM64 Python where possible and verify architecture:
+
+```bash
+uname -m
+python3.12 --version
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+python -m pytest
+edi doctor
+```
+
+The core does not require Rosetta. Do not assume MPS availability for Paddle because another PyTorch-based provider supports MPS. Accelerator capability is provider-specific and must be declared by that provider/runtime profile.
+
+### 9.7 Docker CPU
+
+Docker is an isolation/deployment boundary, not a domain dependency. A production image should keep the core and each ML runtime independently replaceable.
+
+Recommended topology:
+
+```text
+core-api
+worker-paddle-cpu
+postgres
+```
+
+Persist provider/model data outside ephemeral container layers:
+
+```text
+/runtime-data  -> provider runtime/state
+/model-data    -> governed model/cache/artifacts
+```
+
+Do not bake credentials into an image or accept arbitrary installer commands through a management API.
+
+### 9.8 Docker NVIDIA
+
+Recommended topology:
+
+```text
+core-api
+worker-paddle-nvidia
+postgres
+```
+
+The host must expose NVIDIA GPU capability to Docker through the supported NVIDIA container runtime/toolkit. Verify GPU visibility inside the worker container before provider installation:
+
+```text
+nvidia-smi
+edi doctor
+```
+
+Then use the same governed NVIDIA dry-run/install/model workflow. A container that cannot see the GPU MUST fail the NVIDIA profile rather than silently switching execution class.
+
+### 9.9 OS-independent verification
+
+After installation on any supported host:
+
+```text
+python -m pytest
+edi doctor
+edi providers list
+edi models list
+edi models verify pp-ocrv6-medium
+```
+
+For a production host, also verify the intended ProcessingProfile, runtime state, model-state semantics, network/offline assumptions, and PostgreSQL connectivity where applicable.
 
 ## 10. Troubleshooting
 
