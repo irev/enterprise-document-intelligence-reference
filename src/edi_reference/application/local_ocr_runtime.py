@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from edi_reference.adapters.local_ocr import ProcessIsolatedOcrEngine
+from edi_reference.adapters.ocr_worker import ProcessIsolatedOcrEngine
 from edi_reference.adapters.paddle_pipeline import (
     PaddleOcrEngineFactory,
     PaddlePipelineConfiguration,
