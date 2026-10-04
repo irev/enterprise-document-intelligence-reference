@@ -4,6 +4,7 @@ from edi_reference.domain.execution import (
     Capability,
     CapabilityRequest,
     DataEgress,
+    ProviderHealth,
     ExecutionPlan,
     ExecutionPolicy,
     PlannedStep,
@@ -41,6 +42,7 @@ def build_execution_plan(
             provider for provider in providers
             if capability in provider.capabilities
             and provider.execution_class in policy.allowed_execution_classes
+            and provider.health is not ProviderHealth.UNAVAILABLE
             and (
                 policy.allow_external_egress
                 or provider.data_egress is DataEgress.NONE
@@ -49,14 +51,37 @@ def build_execution_plan(
         if not eligible:
             raise ExecutionPlanningError(f"NO_ELIGIBLE_PROVIDER:{capability.value}")
 
-        # Registry order is not policy. Stable lexical selection makes this
-        # reference deterministic until an explicit preference policy is added.
-        selected = sorted(eligible, key=lambda item: item.provider_id)[0]
+        capability_policy = next(
+            (item for item in policy.capability_policies if item.capability is capability),
+            None,
+        )
+        if capability_policy is not None:
+            rank = {execution_class: index for index, execution_class in enumerate(capability_policy.preference)}
+            preferred = [provider for provider in eligible if provider.execution_class in rank]
+            if not preferred:
+                raise ExecutionPlanningError(f"NO_PREFERRED_PROVIDER:{capability.value}")
+            selected = sorted(
+                preferred,
+                key=lambda item: (
+                    rank[item.execution_class],
+                    item.health is ProviderHealth.DEGRADED,
+                    item.provider_id,
+                ),
+            )[0]
+            selection_reason = "CAPABILITY_POLICY_PREFERENCE"
+        else:
+            selected = sorted(
+                eligible,
+                key=lambda item: (item.health is ProviderHealth.DEGRADED, item.provider_id),
+            )[0]
+            selection_reason = "DETERMINISTIC_ELIGIBLE_PROVIDER"
+
         steps.append(PlannedStep(
             capability=capability,
             provider_id=selected.provider_id,
             provider_version=selected.provider_version,
             execution_class=selected.execution_class,
+            selection_reason=selection_reason,
         ))
 
     return ExecutionPlan(policy.policy_id, policy.policy_version, tuple(steps))
