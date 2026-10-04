@@ -99,7 +99,9 @@ def main(argv: list[str] | None = None) -> int:
     service = RuntimeManagementService(load_provider_manifest())
     if args.command == "providers":
         for provider in service.providers():
-            print(f"{provider['provider_id']}: {', '.join(provider['profiles'])}")
+            profiles = provider["profiles"]
+            assert isinstance(profiles, list)
+            print(f"{provider['provider_id']}: {', '.join(str(item) for item in profiles)}")
         return 0
 
     if args.command == "models":
