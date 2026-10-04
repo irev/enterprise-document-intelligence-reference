@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from edi_reference.domain.processing import ProcessingClaim
+from edi_reference.domain.processing import ProcessingClaim, ProcessingClaimStatus
 
 
 @dataclass
@@ -22,9 +22,9 @@ class InMemoryProcessingClaimRepository:
         self.claims[claim.message_id] = claim
 
 
-    def try_reclaim(self, claim: ProcessingClaim, expected_generation: int) -> bool:
+    def try_reclaim(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         current = self.claims.get(claim.message_id)
-        if current is None or current.claim_generation != expected_generation:
+        if (\n            current is None\n            or current.claim_generation != expected_generation\n            or current.status is ProcessingClaimStatus.COMPLETED\n            or (current.status is ProcessingClaimStatus.CLAIMED and current.lease_until > now)\n        ):
             return False
         self.claims[claim.message_id] = claim
         return True
