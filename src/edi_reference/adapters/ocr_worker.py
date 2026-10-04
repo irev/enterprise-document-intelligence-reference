@@ -2,9 +2,16 @@
 
 import multiprocessing as mp
 from dataclasses import dataclass
-from typing import Callable
+from multiprocessing.context import BaseContext
+from multiprocessing.process import BaseProcess
+from typing import Callable, Protocol, cast
 
 from edi_reference.adapters.local_ocr import LocalOcrEngine
+
+
+class ProcessContext(Protocol):
+    def Pipe(self, duplex: bool = ...) -> tuple[object, object]: ...
+    def Process(self, *, target, args) -> BaseProcess: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +49,7 @@ class ProcessIsolatedOcrEngine:
     ):
         self._factory = engine_factory
         self._limits = worker_limits
-        self._context = mp.get_context(start_method)
+        self._context = cast(ProcessContext, mp.get_context(start_method))
 
     def extract_text(self, document_bytes: bytes, *, timeout_seconds: int) -> bytes:
         if timeout_seconds <= 0:
