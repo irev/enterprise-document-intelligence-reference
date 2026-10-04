@@ -57,6 +57,7 @@ def consume_processing_message(
         claimed_at=now,
         lease_until=now + timedelta(seconds=lease_seconds),
         claim_generation=(existing.claim_generation + 1) if existing else 1,
+        observation_id=message.observation_id,
     )
     if existing is None and not repository.try_create(claim):
         concurrent = repository.get(message.message_id)
