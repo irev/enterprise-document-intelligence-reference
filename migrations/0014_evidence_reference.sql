@@ -18,10 +18,10 @@ CREATE TABLE processing.evidence_reference (
     block_id text,
     table_row integer,
     table_column integer,
-    bbox_x double precision,
-    bbox_y double precision,
-    bbox_width double precision,
-    bbox_height double precision,
+    bbox_x0 double precision,
+    bbox_y0 double precision,
+    bbox_x1 double precision,
+    bbox_y1 double precision,
     text_quote text,
     PRIMARY KEY (result_id, result_version, evidence_ordinal),
     FOREIGN KEY (result_id, result_version, observation_id, observation_sha256)
@@ -36,8 +36,8 @@ CREATE TABLE processing.evidence_reference (
         (kind = 'TEXT_BLOCK' AND block_id IS NOT NULL)
         OR (kind = 'TABLE_CELL' AND block_id IS NOT NULL
             AND table_row IS NOT NULL AND table_column IS NOT NULL)
-        OR (kind = 'REGION' AND bbox_x IS NOT NULL AND bbox_y IS NOT NULL
-            AND bbox_width IS NOT NULL AND bbox_height IS NOT NULL)
+        OR (kind = 'REGION' AND bbox_x0 IS NOT NULL AND bbox_y0 IS NOT NULL
+            AND bbox_x1 IS NOT NULL AND bbox_y1 IS NOT NULL)
     )
 );
 
