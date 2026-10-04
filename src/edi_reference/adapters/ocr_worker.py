@@ -2,7 +2,7 @@
 
 import multiprocessing as mp
 from dataclasses import dataclass
-from multiprocessing.context import BaseContext
+from multiprocessing.connection import Connection
 from multiprocessing.process import BaseProcess
 from typing import Callable, Protocol, cast
 
@@ -10,7 +10,7 @@ from edi_reference.adapters.local_ocr import LocalOcrEngine
 
 
 class ProcessContext(Protocol):
-    def Pipe(self, duplex: bool = ...) -> tuple[object, object]: ...
+    def Pipe(self, duplex: bool = ...) -> tuple[Connection, Connection]: ...
     def Process(self, *, target, args) -> BaseProcess: ...
 
 
@@ -31,10 +31,7 @@ def _run_engine(factory: Callable[[], LocalOcrEngine], document_bytes: bytes, ti
         else:
             connection.send(("OK", output))
     except BaseException:
-        try:
-            connection.send(("ERROR", "OCR_WORKER_FAILED"))
-        except BaseException:
-            pass
+        connection.send(("ERROR", "OCR_WORKER_FAILED"))
     finally:
         connection.close()
 
