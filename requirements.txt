@@ -1,0 +1,3 @@
+# Compatibility bootstrap for the dependency-free core package.
+# pyproject.toml is the authoritative dependency declaration.
+-e .
