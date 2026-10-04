@@ -486,3 +486,19 @@ def test_atomic_finalizing_processor_must_commit_terminal_success():
     persisted = repo.get(message().message_id)
     assert persisted is not None
     assert persisted.status is ProcessingClaimStatus.CLAIMED
+
+
+def test_consumer_rejects_ambiguous_finalization_modes():
+    import pytest
+
+    with pytest.raises(ValueError, match="AMBIGUOUS_PROCESSOR_FINALIZATION_MODE"):
+        consume_processing_message(
+            message(),
+            repository=InMemoryProcessingClaimRepository(),
+            processor=Processor(),
+            observations=Observations(),
+            clock=Clock(),
+            ids=Ids(),
+            lease_aware=True,
+            processor_finalizes_success=True,
+        )
