@@ -100,11 +100,14 @@ class PostgreSqlProcessingClaimRepository:
                     """UPDATE processing.processing_claim SET
                          status=%s, claimed_at=%s, lease_until=%s,
                          claim_generation=%s, completed_at=%s, failure_code=%s
-                       WHERE message_id=%s AND claim_generation=%s""",
+                       WHERE message_id=%s
+                         AND claim_generation=%s
+                         AND status = 'CLAIMED'
+                         AND lease_until > %s""",
                     (
                         claim.status.value, claim.claimed_at, claim.lease_until,
                         claim.claim_generation, claim.completed_at, claim.failure_code,
-                        claim.message_id, expected_generation,
+                        claim.message_id, expected_generation, now,
                     ),
                 )
                 return cursor.rowcount == 1
