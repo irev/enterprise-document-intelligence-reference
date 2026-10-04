@@ -1,0 +1,1 @@
+"""Specification-facing contract vocabulary."""
