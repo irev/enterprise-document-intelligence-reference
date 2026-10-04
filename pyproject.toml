@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "enterprise-document-intelligence-reference"
+version = "0.1.0"
+description = "Python reference implementation of the Enterprise Document Intelligence specification"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/edi_reference"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
