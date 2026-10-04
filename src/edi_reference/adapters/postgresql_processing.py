@@ -80,7 +80,10 @@ class PostgreSqlProcessingClaimRepository:
                          failure_code=%s
                        WHERE message_id=%s
                          AND claim_generation=%s
-                         AND status IN ('CLAIMED','FAILED')""",
+                         AND (
+                           status = 'FAILED'
+                           OR (status = 'CLAIMED' AND lease_until <= %s)
+                         )""",
                     (
                         claim.processing_run_id, claim.tenant_id, claim.application_id,
                         claim.observation_sha256, claim.status.value, claim.claimed_at,
