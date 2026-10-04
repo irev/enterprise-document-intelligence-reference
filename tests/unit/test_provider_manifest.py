@@ -8,7 +8,7 @@ def test_manifest_exposes_paddle_models() -> None:
 
     assert paddle.runtime_family == "paddle"
     assert paddle.profiles == ("cpu", "nvidia")
-    assert paddle.models == ("pp-ocrv5", "pp-structure-v3")
+    assert paddle.models == ("pp-ocrv6-medium", "pp-ocrv5-server", "pp-structure-v3")
 
 
 def test_manifest_keeps_core_ml_optional() -> None:
