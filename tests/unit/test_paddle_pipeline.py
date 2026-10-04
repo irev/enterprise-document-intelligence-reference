@@ -1,11 +1,15 @@
+import hashlib
 import json
+import pickle
 import sys
 from pathlib import Path
 
 import pytest
 
 from edi_reference.adapters.paddle_pipeline import (
-    PaddleOcrEngineFactory,\n    PaddlePipelineConfiguration,\n    build_paddle_pipeline,
+    PaddleOcrEngineFactory,
+    PaddlePipelineConfiguration,
+    build_paddle_pipeline,
     load_governed_model,
 )
 
@@ -18,7 +22,6 @@ def write_state(root: Path, *, storage: str = "UPSTREAM_CACHE") -> None:
         '{"model_id":"pp-ocrv6-medium","names":["PP-OCRv6_medium_det","PP-OCRv6_medium_rec"]}',
         encoding="utf-8",
     )
-    import hashlib
     digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
     (artifact / "model-state.json").write_text(
         json.dumps(
@@ -63,10 +66,10 @@ def test_factory_uses_explicit_v6_model_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_state(tmp_path)
-    calls = {}
+    calls: dict[str, object] = {}
 
     class PaddleOCR:
-        def __init__(self, **kwargs):
+        def __init__(self, **kwargs: object) -> None:
             calls.update(kwargs)
 
     class Module:
@@ -85,8 +88,6 @@ def test_factory_uses_explicit_v6_model_names(
 
 
 def test_engine_factory_is_pickle_safe_configuration(tmp_path: Path) -> None:
-    import pickle
-
     factory = PaddleOcrEngineFactory(
         PaddlePipelineConfiguration("pp-ocrv6-medium", tmp_path)
     )
