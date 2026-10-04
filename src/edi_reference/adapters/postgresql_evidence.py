@@ -41,18 +41,18 @@ class PostgreSqlEvidenceRepository:
                         """INSERT INTO processing.evidence_reference
                            (result_id, result_version, evidence_ordinal,
                             observation_id, observation_sha256, page_number, kind,
-                            block_id, table_row, table_column, bbox_x, bbox_y,
-                            bbox_width, bbox_height, text_quote)
+                            block_id, table_row, table_column, bbox_x0, bbox_y0,
+                            bbox_x1, bbox_y1, text_quote)
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                         (
                             result_id, result_version, ordinal,
                             evidence.observation_id, evidence.observation_sha256,
                             evidence.page_number, evidence.kind.value,
                             evidence.block_id, evidence.row, evidence.column,
-                            None if bbox is None else bbox.x,
-                            None if bbox is None else bbox.y,
-                            None if bbox is None else bbox.width,
-                            None if bbox is None else bbox.height,
+                            None if bbox is None else bbox.x0,
+                            None if bbox is None else bbox.y0,
+                            None if bbox is None else bbox.x1,
+                            None if bbox is None else bbox.y1,
                             evidence.text_quote,
                         ),
                     )
@@ -104,7 +104,7 @@ class PostgreSqlEvidenceRepository:
             parameters += (field_ordinal,)
         query = f"""SELECT e.observation_id, e.observation_sha256, e.page_number,
                            e.kind, e.block_id, e.table_row, e.table_column,
-                           e.bbox_x, e.bbox_y, e.bbox_width, e.bbox_height,
+                           e.bbox_x0, e.bbox_y0, e.bbox_x1, e.bbox_y1,
                            e.text_quote
                     FROM processing.{link_table} link
                     JOIN processing.evidence_reference e
