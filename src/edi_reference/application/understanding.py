@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 from edi_reference.domain.understanding import (
     PageContent,
     UnderstandingFailureCode,
@@ -25,7 +25,7 @@ class ParserAdapter(Protocol):
 
 
 def understand_document(
-    observation: ScopedObservation,
+    observation: SourceObservation,
     content: bytes,
     *,
     parser: ParserAdapter,
