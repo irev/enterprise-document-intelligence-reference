@@ -85,12 +85,13 @@ class PostgreSqlInboundStore:
                     """INSERT INTO integration.outbox_message
                        (message_id, tenant_id, application_id, correlation_id, aggregate_id,
                         message_type, payload_ref, created_at, status, attempts,
-                        published_at, last_error_code)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        published_at, last_error_code, observation_id)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         message.message_id, message.tenant_id, message.application_id,
                         message.correlation_id, message.aggregate_id, message.message_type,
                         message.payload_ref, message.created_at, message.status.value,
                         message.attempts, message.published_at, message.last_error_code,
+                        message.observation_id,
                     ),
                 )
