@@ -41,6 +41,6 @@ def resolve_provider(
         raise ProviderConfigurationError("PROVIDER_DISABLED")
     if config.tenant_allowlist is not None and tenant_id not in config.tenant_allowlist:
         raise ProviderConfigurationError("PROVIDER_NOT_ALLOWED_FOR_TENANT")
-    if config.application_allowlist is not None and application_id not in config.application_allowlist:
+    if config.application_allowlist is not None and (tenant_id, application_id) not in config.application_allowlist:
         raise ProviderConfigurationError("PROVIDER_NOT_ALLOWED_FOR_APPLICATION")
     return ResolvedProvider(capability, config)
