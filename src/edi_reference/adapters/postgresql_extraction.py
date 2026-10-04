@@ -71,7 +71,7 @@ class PostgreSqlExtractedFieldRepository:
                                 result_id,
                                 result_version,
                                 ordinal,
-                                Jsonb(normalized.value),
+                                normalized.value,
                                 normalized.value_type,
                                 normalized.normalizer_id,
                                 normalized.normalizer_version,
