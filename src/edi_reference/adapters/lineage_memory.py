@@ -15,12 +15,17 @@ class InMemoryObservationRepository:
     def save(self, observation: ScopedObservation) -> None:
         self.observations[observation.observation_id] = observation
 
-    def find_by_document_digest(self, document_id: str, sha256: str) -> ScopedObservation | None:
+    def find_by_scope_document_digest(
+        self, tenant_id: str, application_id: str, document_id: str, sha256: str
+    ) -> ScopedObservation | None:
         return next(
             (
                 item
                 for item in self.observations.values()
-                if item.document_id == document_id and item.sha256 == sha256
+                if item.tenant_id == tenant_id
+                and item.application_id == application_id
+                and item.document_id == document_id
+                and item.sha256 == sha256
             ),
             None,
         )
