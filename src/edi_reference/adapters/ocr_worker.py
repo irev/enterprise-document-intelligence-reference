@@ -22,7 +22,7 @@ def _run_engine(factory: Callable[[], LocalOcrEngine], document_bytes: bytes, ti
         if not isinstance(output, bytes):
             connection.send(("ERROR", "INVALID_OCR_ENGINE_OUTPUT"))
         else:
-            connection.send_bytes(output)
+            connection.send(("OK", output))
     except BaseException:
         try:
             connection.send(("ERROR", "OCR_WORKER_FAILED"))
@@ -63,13 +63,20 @@ class ProcessIsolatedOcrEngine:
                     process.join()
                 raise TimeoutError("OCR_WORKER_TIMEOUT")
             try:
-                payload = parent.recv_bytes()
+                message = parent.recv()
             except (EOFError, OSError):
                 raise RuntimeError("OCR_WORKER_FAILED") from None
             process.join(self._limits.termination_grace_seconds)
             if process.is_alive():
                 process.terminate()
                 process.join()
+            if not isinstance(message, tuple) or len(message) != 2:
+                raise RuntimeError("OCR_WORKER_FAILED")
+            status, payload = message
+            if status == "ERROR":
+                raise RuntimeError(str(payload))
+            if status != "OK" or not isinstance(payload, bytes):
+                raise RuntimeError("OCR_WORKER_FAILED")
             return payload
         finally:
             parent.close()
