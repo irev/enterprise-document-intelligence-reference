@@ -26,6 +26,8 @@ CREATE TABLE control_plane.provider_configuration (
     engine_ref text NOT NULL,
     secret_ref text,
     endpoint_ref text,
+    tenant_access_mode text NOT NULL DEFAULT 'UNRESTRICTED',
+    application_access_mode text NOT NULL DEFAULT 'UNRESTRICTED',
     updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (provider_id <> ''),
     CHECK (provider_version <> ''),
@@ -33,7 +35,9 @@ CREATE TABLE control_plane.provider_configuration (
     CHECK (deployment_zone <> ''),
     CHECK (engine_ref <> ''),
     CHECK (secret_ref IS NULL OR secret_ref <> ''),
-    CHECK (endpoint_ref IS NULL OR endpoint_ref <> '')
+    CHECK (endpoint_ref IS NULL OR endpoint_ref <> ''),
+    CHECK (tenant_access_mode IN ('UNRESTRICTED', 'ALLOWLIST')),
+    CHECK (application_access_mode IN ('UNRESTRICTED', 'ALLOWLIST'))
 );
 
 CREATE TABLE control_plane.provider_tenant_authorization (
