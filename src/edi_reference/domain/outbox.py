@@ -21,6 +21,7 @@ class OutboxMessage:
     message_type: str
     payload_ref: str
     created_at: datetime
+    observation_id: str | None = None
     status: OutboxStatus = OutboxStatus.PENDING
     attempts: int = 0
     published_at: datetime | None = None
