@@ -3,6 +3,10 @@
 -- Evidence is stored once per result version and linked to the claims that use
 -- it. Exact observation+digest lineage is enforced against the parent result.
 
+ALTER TABLE processing.processing_result
+    ADD CONSTRAINT processing_result_evidence_lineage_unique
+    UNIQUE (result_id, result_version, observation_id, observation_sha256);
+
 CREATE TABLE processing.evidence_reference (
     result_id text NOT NULL,
     result_version text NOT NULL,
