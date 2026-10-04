@@ -1,7 +1,6 @@
 """Deterministic provider registry and execution planner."""
 
 from edi_reference.domain.execution import (
-    Capability,
     CapabilityRequest,
     DataEgress,
     ProviderHealth,
