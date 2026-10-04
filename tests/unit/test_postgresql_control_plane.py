@@ -17,7 +17,7 @@ class Cursor:
         if "provider_tenant_authorization" in self.query:
             return [("tenant-a",)]
         if "provider_application_authorization" in self.query:
-            return [("app-a",)]
+            return [("tenant-a", "app-a")]
         return []
 
     def close(self):
@@ -43,7 +43,7 @@ def test_postgresql_source_returns_current_configuration_and_authorization():
     assert result.config_version == "cfg-2"
     assert result.enabled is False
     assert result.tenant_allowlist == frozenset({"tenant-a"})
-    assert result.application_allowlist == frozenset({"app-a"})
+    assert result.application_allowlist == frozenset({("tenant-a", "app-a")})
     assert connection.closed
 
 
