@@ -102,4 +102,63 @@ python -m pytest tests/integration -vv
 
 See `AGENTS.md` before making architecture or contract changes.
 
-The implementation is intended to operate as a shared service for multiple authorized consumer applications. See `docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md`.
+The implementation is intended to operate as a shared service for multiple authorized consumer applications. See `docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md`.## Installation
+
+The core and ML provider runtimes are intentionally isolated. Do **not** install PaddlePaddle/PaddleOCR or other model stacks into the core `.venv`.
+
+### 1. Bootstrap the core
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+```
+
+Windows PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+```
+
+Verify the host and available providers:
+
+```text
+edi doctor
+edi providers list
+edi models list
+```
+
+### 2. Inspect, then install PaddleOCR
+
+CPU:
+
+```text
+edi install --provider paddle-ocr --profile cpu --dry-run
+edi install --provider paddle-ocr --profile cpu --yes
+```
+
+NVIDIA:
+
+```text
+edi doctor
+edi install --provider paddle-ocr --profile nvidia --dry-run
+edi install --provider paddle-ocr --profile nvidia --yes
+```
+
+Provider dependencies are installed into `.edi/runtimes/paddle-ocr/<profile>/venv`, not the core environment. NVIDIA installation fails closed when a compatible runtime/driver cannot be resolved; it does not silently downgrade to CPU.
+
+### 3. Provision a governed OCR model
+
+```text
+edi models pull pp-ocrv6-medium --profile cpu --yes
+edi models verify pp-ocrv6-medium
+```
+
+Use `--profile nvidia` when provisioning against the installed NVIDIA runtime. The current pull operation warms Paddle-managed upstream cache and records provenance as `WARMED / UPSTREAM_CACHE`; it does not yet claim offline-pinned model weights.
+
+For PostgreSQL setup, model-source selection, WSL2/Linux guidance, offline/on-premise constraints, state files, troubleshooting, and the full verification checklist, read [`INSTALLATION.md`](INSTALLATION.md).
+
