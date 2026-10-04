@@ -93,7 +93,7 @@ class PostgreSqlProcessingClaimRepository:
                 )
                 return cursor.rowcount == 1
 
-    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int) -> bool:
+    def save_if_generation(self, claim: ProcessingClaim, expected_generation: int, *, now) -> bool:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
