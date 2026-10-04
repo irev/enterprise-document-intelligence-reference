@@ -1,8 +1,8 @@
 """PostgreSQL persistence for extracted fields and normalized values."""
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
-import json
 from typing import Any
 
 from edi_reference.domain.normalization import NormalizedField
