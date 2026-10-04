@@ -8,7 +8,7 @@ from edi_reference.adapters.postgresql_lineage import (
     PostgreSqlProcessingRunRepository,
 )
 from edi_reference.application.lineage import bind_processing_run
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
 pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not configured")
@@ -46,7 +46,7 @@ def test_processing_run_is_bound_to_scoped_observation_not_digest_alone():
                    VALUES ('document-lineage','lineage-tenant','lineage-app',CURRENT_TIMESTAMP)"""
             )
 
-    observation = ScopedObservation(
+    observation = SourceObservation(
         "observation-lineage", "document-lineage", "lineage-tenant", "lineage-app",
         "c" * 64, 1234, "application/pdf", datetime.now(UTC), "source-v1",
     )
