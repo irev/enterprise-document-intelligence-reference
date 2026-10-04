@@ -4,7 +4,12 @@ from unittest.mock import Mock
 import pytest
 
 from edi_reference.application.paddle_install import InstallStep
-from edi_reference.application.runtime_installer import (\n    InstallStepFailed,\n    ensure_runtime_venv,\n    execute_steps,\n    runtime_python,\n)
+from edi_reference.application.runtime_installer import (
+    InstallStepFailed,
+    ensure_runtime_venv,
+    execute_steps,
+    runtime_python,
+)
 
 
 def test_runtime_python_is_inside_runtime_directory(tmp_path: Path) -> None:
