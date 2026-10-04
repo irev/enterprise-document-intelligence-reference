@@ -27,7 +27,7 @@ def build_paddle_install_plan(
     *,
     python_executable: str,
     profile: str,
-    nvidia_driver_major: int | None = None,
+    nvidia_driver_version: tuple[int, int, int] | None = None,
 ) -> PaddleInstallPlan:
     if profile == "cpu":
         engine = (
@@ -40,9 +40,14 @@ def build_paddle_install_plan(
             "https://www.paddlepaddle.org.cn/packages/stable/cpu/",
         )
     elif profile == "nvidia":
-        if nvidia_driver_major is None:
+        if nvidia_driver_version is None:
             raise ValueError("NVIDIA_DRIVER_VERSION_REQUIRED")
-        channel = "cu126" if nvidia_driver_major >= 550 else "cu118"
+        if nvidia_driver_version >= (550, 54, 14):
+            channel = "cu126"
+        elif nvidia_driver_version >= (452, 39, 0):
+            channel = "cu118"
+        else:
+            raise ValueError("NVIDIA_DRIVER_TOO_OLD")
         engine = (
             python_executable,
             "-m",
@@ -63,7 +68,7 @@ def build_paddle_install_plan(
             InstallStep("install-engine", engine),
             InstallStep(
                 "install-paddleocr",
-                (python_executable, "-m", "pip", "install", "paddleocr>=3.7,<3.8"),
+                (python_executable, "-m", "pip", "install", "paddleocr[doc-parser]>=3.7,<3.8"),
             ),
         ),
         verify_argv=(
