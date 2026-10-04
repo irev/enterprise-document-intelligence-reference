@@ -179,6 +179,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "install":
         try:
             service = RuntimeManagementService(load_provider_manifest())
+            capabilities = inspect_host_capabilities(
+                nvidia_driver_version=host.nvidia_driver_version
+            )
+            requirement = provider_runtime_requirement(
+                args.provider, args.profile, host_os=capabilities.os
+            )
+            resolved_runtime = resolve_runtime(capabilities, requirement)
+            if resolved_runtime.status is not CompatibilityStatus.COMPATIBLE:
+                print(resolved_runtime.reason or "RUNTIME_INCOMPATIBLE")
+                return 2
             runtime_dir = args.runtime_root / args.provider / args.profile
             planned_python_executable = str(
                 runtime_dir
@@ -201,16 +211,6 @@ def main(argv: list[str] | None = None) -> int:
             print("INSTALL_CONFIRMATION_REQUIRED_USE_YES")
             return 2
         try:
-            capabilities = inspect_host_capabilities(
-                nvidia_driver_version=host.nvidia_driver_version
-            )
-            requirement = provider_runtime_requirement(
-                args.provider, args.profile, host_os=capabilities.os
-            )
-            resolved_runtime = resolve_runtime(capabilities, requirement)
-            if resolved_runtime.status is not CompatibilityStatus.COMPATIBLE:
-                print(resolved_runtime.reason or "RUNTIME_INCOMPATIBLE")
-                return 2
             result = service.install_provider(
                 provider_id=args.provider,
                 profile=args.profile,
