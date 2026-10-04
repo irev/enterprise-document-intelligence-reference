@@ -15,6 +15,10 @@ class ProviderDescriptor:
     def __post_init__(self) -> None:
         if not self.adapter_id or not self.adapter_version:
             raise ValueError("INVALID_PROVIDER_DESCRIPTOR")
+        if self.capability.execution_class.name == "REMOTE_MODEL" and self.capability.data_egress.name == "NONE":
+            raise ValueError("REMOTE_PROVIDER_MUST_DECLARE_EXTERNAL_EGRESS")
+        if self.capability.execution_class.name != "REMOTE_MODEL" and self.capability.data_egress.name != "NONE":
+            raise ValueError("NON_REMOTE_PROVIDER_CANNOT_DECLARE_EXTERNAL_EGRESS")
 
 
 class ProviderAdapter:
