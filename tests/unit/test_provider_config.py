@@ -48,6 +48,11 @@ def test_tenant_and_application_allowlists_are_enforced():
         application_allowlist=frozenset({("tenant-a", "app-a")}),
     )
     registry = ProviderConfigurationRegistry((restricted,))
+    resolved = resolve_provider(
+        PROVIDER, configurations=registry,
+        tenant_id="tenant-a", application_id="app-a",
+    )
+    assert resolved.configuration == restricted
     with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_TENANT"):
         resolve_provider(PROVIDER, configurations=registry, tenant_id="tenant-b", application_id="app-a")
     with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_APPLICATION"):
@@ -69,3 +74,25 @@ def test_explicit_empty_allowlist_denies_every_application():
     registry = ProviderConfigurationRegistry((config(application_allowlist=frozenset()),))
     with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_APPLICATION"):
         resolve_provider(PROVIDER, configurations=registry, tenant_id="tenant-a", application_id="app-a")
+
+
+
+def test_application_allowlist_is_scoped_by_tenant():
+    restricted = config(
+        tenant_allowlist=None,
+        application_allowlist=frozenset({("tenant-a", "shared-app")}),
+    )
+    registry = ProviderConfigurationRegistry((restricted,))
+
+    resolve_provider(
+        PROVIDER, configurations=registry,
+        tenant_id="tenant-a", application_id="shared-app",
+    )
+    with pytest.raises(
+        ProviderConfigurationError,
+        match="PROVIDER_NOT_ALLOWED_FOR_APPLICATION",
+    ):
+        resolve_provider(
+            PROVIDER, configurations=registry,
+            tenant_id="tenant-b", application_id="shared-app",
+        )
