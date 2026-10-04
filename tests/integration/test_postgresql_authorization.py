@@ -48,10 +48,8 @@ def execute_sql(sql, params=()):
 
 
 def test_committed_authorization_revocation_blocks_stale_plan():
-    migration = open("migrations/0001_control_plane.sql", encoding="utf-8").read()
     with connect() as connection:
         with connection.cursor() as cursor:
-            cursor.execute(migration)
             cursor.execute("DELETE FROM control_plane.provider_application_authorization WHERE provider_id = %s", (PROVIDER.provider_id,))
             cursor.execute("DELETE FROM control_plane.provider_tenant_authorization WHERE provider_id = %s", (PROVIDER.provider_id,))
             cursor.execute("DELETE FROM control_plane.provider_configuration WHERE provider_id = %s", (PROVIDER.provider_id,))
