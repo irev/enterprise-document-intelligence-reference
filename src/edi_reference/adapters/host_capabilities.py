@@ -80,7 +80,7 @@ def _query_python_version(executable: Path) -> tuple[int, int, int] | None:
         return None
     if len(parts) != 3:
         return None
-    return parts  # type: ignore[return-value]
+    return (parts[0], parts[1], parts[2])
 
 
 def _has_wsl2(os_name: str) -> bool:
