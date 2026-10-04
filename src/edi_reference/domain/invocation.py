@@ -45,3 +45,8 @@ class InvocationResult:
     provider_id: str
     provider_version: str
     output_bytes: bytes
+    media_type: str = "application/octet-stream"
+
+    def __post_init__(self) -> None:
+        if not self.provider_id or not self.provider_version or not self.media_type:
+            raise ValueError("INVALID_INVOCATION_RESULT")
