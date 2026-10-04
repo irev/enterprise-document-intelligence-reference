@@ -1,8 +1,9 @@
 import pytest
 
-from edi_reference.application.planned_provider import authorize_planned_provider
+from edi_reference.application.planned_provider import authorize_planned_provider, invoke_planned_provider
 from edi_reference.application.provider_config import ProviderConfigurationError, ProviderConfigurationRegistry
-from edi_reference.domain.execution import Capability, DataEgress, ExecutionClass, PlannedStep, ProviderCapability
+from edi_reference.domain.execution import Capability, DataEgress, ExecutionClass, ExecutionPolicy, PlannedStep, ProviderCapability
+from edi_reference.domain.invocation import InvocationLimits, InvocationResult
 from edi_reference.domain.provider_config import ProviderConfiguration
 
 
@@ -68,3 +69,46 @@ def test_plan_and_provider_identity_must_match():
             configurations=ProviderConfigurationRegistry((config(),)),
             tenant_id="tenant-a", application_id="app-a",
         )
+
+
+
+class Invoker:
+    def __init__(self):
+        self.called = False
+
+    def invoke(self, request, limits):
+        self.called = True
+        return InvocationResult(request.provider_id, request.provider_version, b"ok")
+
+
+def test_planned_invocation_authorizes_before_calling_provider():
+    invoker = Invoker()
+    result = invoke_planned_provider(
+        STEP, attempt_id="attempt-1", input_bytes=b"document",
+        provider=PROVIDER,
+        configurations=ProviderConfigurationRegistry((config(
+            tenant_allowlist=frozenset({"tenant-a"}),
+            application_allowlist=frozenset({"app-a"}),
+        ),)),
+        tenant_id="tenant-a", application_id="app-a",
+        policy=ExecutionPolicy("local", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False),
+        limits=InvocationLimits(10, 1024, 1024),
+        invoker=invoker,
+    )
+    assert result.output_bytes == b"ok"
+    assert invoker.called
+
+
+def test_disabled_provider_is_blocked_before_invocation():
+    invoker = Invoker()
+    with pytest.raises(ProviderConfigurationError, match="PROVIDER_DISABLED"):
+        invoke_planned_provider(
+            STEP, attempt_id="attempt-1", input_bytes=b"document",
+            provider=PROVIDER,
+            configurations=ProviderConfigurationRegistry((config(enabled=False),)),
+            tenant_id="tenant-a", application_id="app-a",
+            policy=ExecutionPolicy("local", "1", frozenset({ExecutionClass.LOCAL_MODEL}), False),
+            limits=InvocationLimits(10, 1024, 1024),
+            invoker=invoker,
+        )
+    assert not invoker.called
