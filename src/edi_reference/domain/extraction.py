@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 from edi_reference.domain.evidence import EvidenceReference
 
@@ -19,7 +18,6 @@ class ExtractedField:
     field_name: str
     state: FieldState
     raw_value: str | None
-    normalized_value: Any | None
     value_type: str
     confidence: float | None
     evidence: tuple[EvidenceReference, ...]
@@ -35,11 +33,11 @@ class ExtractedField:
         if self.confidence is not None and not 0.0 <= self.confidence <= 1.0:
             raise ValueError("INVALID_FIELD_CONFIDENCE")
         if self.state is FieldState.PRESENT:
-            if self.raw_value is None or self.normalized_value is None or not self.evidence:
-                raise ValueError("PRESENT_FIELD_REQUIRES_VALUE_AND_EVIDENCE")
+            if self.raw_value is None or not self.evidence:
+                raise ValueError("PRESENT_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE")
         elif self.state is FieldState.MISSING:
-            if self.raw_value is not None or self.normalized_value is not None or self.evidence:
+            if self.raw_value is not None or self.evidence:
                 raise ValueError("MISSING_FIELD_MUST_NOT_INVENT_VALUE")
         elif self.state is FieldState.EXPLICIT_NULL:
-            if self.normalized_value is not None or not self.evidence:
+            if not self.evidence:
                 raise ValueError("EXPLICIT_NULL_REQUIRES_EVIDENCE")
