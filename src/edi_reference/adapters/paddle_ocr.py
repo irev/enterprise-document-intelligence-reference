@@ -14,13 +14,9 @@ from edi_reference.domain.ocr import OcrPage, OcrResult, OcrTextLine
 
 
 class PaddleOcrEngine:
-    def __init__(self, pipeline: Any | None = None):
+    def __init__(self, pipeline: Any):
         if pipeline is None:
-            try:
-                from paddleocr import PaddleOCR  # type: ignore[import-not-found]
-            except ImportError as exc:
-                raise RuntimeError("PADDLEOCR_NOT_INSTALLED") from exc
-            pipeline = PaddleOCR()
+            raise ValueError("EXPLICIT_PADDLE_PIPELINE_REQUIRED")
         self._pipeline = pipeline
 
     def extract_text(self, document_bytes: bytes, *, timeout_seconds: int) -> bytes:
