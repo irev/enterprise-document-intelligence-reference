@@ -25,39 +25,39 @@ class Extractor:
         return tuple(self.fields)
 
 
-def field(name, state, raw=None, normalized=None, evidence=(), confidence=None, value_type="string"):
+def field(name, state, raw=None, evidence=(), confidence=None, value_type="string"):
     return ExtractedField(
-        name, state, raw, normalized, value_type, confidence, evidence,
+        name, state, raw, value_type, confidence, evidence,
         "synthetic-extractor", "1", "1",
     )
 
 
-def test_present_field_preserves_raw_normalized_and_evidence():
+def test_present_field_preserves_raw_value_and_evidence_only():
     result = extract_fields(
         DOC, document_type="INVOICE",
-        extractor=Extractor([field("invoice_number", FieldState.PRESENT, "INV-001", "INV-001", EV, .98)]),
+        extractor=Extractor([field("invoice_number", FieldState.PRESENT, "INV-001", EV, .98)]),
     )
     assert result[0].raw_value == "INV-001"
-    assert result[0].normalized_value == "INV-001"
     assert result[0].evidence == EV
+    assert not hasattr(result[0], "normalized_value")
 
 
 def test_missing_field_cannot_invent_value():
     with pytest.raises(ValueError, match="MISSING_FIELD_MUST_NOT_INVENT_VALUE"):
-        field("purchase_order_number", FieldState.MISSING, normalized="PO-FAKE")
+        field("purchase_order_number", FieldState.MISSING, raw="PO-FAKE")
 
 
 def test_present_field_requires_evidence():
-    with pytest.raises(ValueError, match="PRESENT_FIELD_REQUIRES_VALUE_AND_EVIDENCE"):
-        field("invoice_number", FieldState.PRESENT, "INV-001", "INV-001")
+    with pytest.raises(ValueError, match="PRESENT_FIELD_REQUIRES_RAW_VALUE_AND_EVIDENCE"):
+        field("invoice_number", FieldState.PRESENT, "INV-001")
 
 
 def test_explicit_null_is_distinct_from_missing_and_requires_evidence():
-    result = field("reference", FieldState.EXPLICIT_NULL, raw="N/A", normalized=None, evidence=EV)
+    result = field("reference", FieldState.EXPLICIT_NULL, raw="N/A", evidence=EV)
     assert result.state is FieldState.EXPLICIT_NULL
 
 
 def test_duplicate_field_names_are_rejected():
-    one = field("invoice_number", FieldState.PRESENT, "INV-001", "INV-001", EV)
+    one = field("invoice_number", FieldState.PRESENT, "INV-001", EV)
     with pytest.raises(ValueError, match="DUPLICATE_FIELD_NAME"):
         extract_fields(DOC, document_type="INVOICE", extractor=Extractor([one, one]))
