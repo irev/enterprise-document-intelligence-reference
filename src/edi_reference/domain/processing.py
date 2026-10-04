@@ -21,5 +21,6 @@ class ProcessingClaim:
     status: ProcessingClaimStatus
     claimed_at: datetime
     lease_until: datetime
+    claim_generation: int = 1
     completed_at: datetime | None = None
     failure_code: str | None = None
