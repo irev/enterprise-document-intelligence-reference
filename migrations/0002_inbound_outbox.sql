@@ -44,6 +44,6 @@ CREATE TABLE integration.outbox_message (
     CHECK (attempts >= 0)
 );
 
-CREATE INDEX outbox_pending_created_idx
+CREATE INDEX IF NOT EXISTS outbox_pending_created_idx
     ON integration.outbox_message (created_at, message_id)
     WHERE status = 'PENDING';
