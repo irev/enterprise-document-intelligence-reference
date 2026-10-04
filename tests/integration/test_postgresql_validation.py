@@ -30,8 +30,7 @@ def test_validation_findings_round_trip_for_existing_result():
                    ORDER BY created_at LIMIT 1"""
             )
             parent = cursor.fetchone()
-            if parent is None:
-                pytest.skip("no processing result seeded by integration suite")
+            assert parent is not None, "integration database must contain a processing result"
             result_id, result_version = parent
             cursor.execute(
                 """DELETE FROM processing.validation_result
