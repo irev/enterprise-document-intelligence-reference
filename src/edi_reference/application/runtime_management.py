@@ -10,6 +10,7 @@ from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import ProviderManifest
 from edi_reference.application.runtime_installer import (
     InstallExecutionResult,
+    InstallStepFailed,
     ensure_runtime_venv,
     execute_steps,
     write_install_state,
@@ -100,7 +101,19 @@ class RuntimeManagementService:
             profile=profile,
             nvidia_driver_version=asdict(host).get("nvidia_driver_version"),
         )
-        steps = execute_steps(paddle.steps)
+        try:
+            steps = execute_steps(paddle.steps)
+        except InstallStepFailed as exc:
+            failed = InstallExecutionResult(
+                provider_id=provider_id,
+                profile=profile,
+                runtime_dir=str(runtime_dir),
+                status="FAILED",
+                steps=exc.results,
+                error_code=str(exc),
+            )
+            write_install_state(runtime_dir, failed)
+            raise
         result = InstallExecutionResult(
             provider_id=provider_id,
             profile=profile,
