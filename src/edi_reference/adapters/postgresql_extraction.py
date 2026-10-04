@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import json
 from typing import Any
 
 from edi_reference.domain.normalization import NormalizedField
@@ -69,7 +70,7 @@ class PostgreSqlExtractedFieldRepository:
                                 result_id,
                                 result_version,
                                 ordinal,
-                                normalized.value,
+                                json.dumps(normalized.value, separators=(",", ":")),
                                 normalized.value_type,
                                 normalized.normalizer_id,
                                 normalized.normalizer_version,
