@@ -14,7 +14,7 @@ from edi_reference.application.ports import (
 )
 from edi_reference.domain.inbound import InboundRecord, InboundStatus, ProcessingDispatch
 from edi_reference.domain.outbox import OutboxMessage
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 from edi_reference.domain.ingestion import Clock, IdGenerator, SourcePolicy
 from edi_reference.domain.integration import InteractionContext
 from edi_reference.domain.source import SourceReference
@@ -50,7 +50,7 @@ class InboundAcceptanceStore(Protocol):
     """Atomically persist accepted inbound state, observation, and processing outbox."""
 
     def accept_and_enqueue(
-        self, record: InboundRecord, observation: ScopedObservation, message: OutboxMessage
+        self, record: InboundRecord, observation: SourceObservation, message: OutboxMessage
     ) -> None: ...
 
 
@@ -126,7 +126,7 @@ def receive_document(
     )
     if final.status is InboundStatus.ACCEPTED and final.observation_sha256:
         if acceptance_store is not None:
-            observation = ScopedObservation(
+            observation = SourceObservation(
                 observation_id=ids.new_id(),
                 document_id=final.inbound_id,
                 tenant_id=final.tenant_id,
