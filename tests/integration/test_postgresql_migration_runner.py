@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.apply_migrations import apply_migrations
+from scripts.apply_migrations import apply_migrations, migration_files
 
 
 DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
@@ -13,6 +13,7 @@ pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not confi
 def test_migration_runner_is_rerunnable_and_records_checksums():
     import psycopg
 
+    migrations = migration_files(Path("migrations"))
     apply_migrations(DSN, Path("migrations"))
     apply_migrations(DSN, Path("migrations"))
 
@@ -25,5 +26,6 @@ def test_migration_runner_is_rerunnable_and_records_checksums():
             )
             rows = cursor.fetchall()
 
-    assert [row[0] for row in rows] == ["0001", "0002", "0003", "0004", "0005", "0006"]
+    expected_versions = [path.name.split("_", 1)[0] for path in migrations]
+    assert [row[0] for row in rows] == expected_versions
     assert all(len(row[2]) == 64 for row in rows)
