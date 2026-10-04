@@ -35,7 +35,7 @@ def build_paddle_install_plan(
             "-m",
             "pip",
             "install",
-            "paddlepaddle==3.2.1",
+            "paddlepaddle==3.2.0",
             "-i",
             "https://www.paddlepaddle.org.cn/packages/stable/cpu/",
         )
@@ -53,7 +53,7 @@ def build_paddle_install_plan(
             "-m",
             "pip",
             "install",
-            "paddlepaddle-gpu==3.2.1",
+            "paddlepaddle-gpu==3.2.0",
             "-i",
             f"https://www.paddlepaddle.org.cn/packages/stable/{channel}/",
         )
