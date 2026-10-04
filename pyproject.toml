@@ -14,6 +14,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3,<9",
+  "pytest-cov>=6,<8",
+  "ruff>=0.11,<1",
 ]
 postgres = [
   "psycopg[binary]>=3.2,<4",
@@ -25,3 +27,11 @@ packages = ["src/edi_reference"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
