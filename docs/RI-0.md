@@ -10,7 +10,7 @@ Establish a Python implementation boundary that consumes the normative specifica
 - Explicit specification target.
 - Provider-neutral domain outcomes.
 - Capability declaration vocabulary.
-- Conformance adapter interface.
+- Machine-readable conformance reporting boundary.
 - Machine-readable conformance report primitives.
 - Deterministic tests and CI.
 
@@ -30,7 +30,7 @@ Establish a Python implementation boundary that consumes the normative specifica
 - [x] Python 3.12+ package is bootstrapped.
 - [x] Core has no runtime third-party dependency.
 - [x] Specification version target is explicit.
-- [x] Conformance adapter boundary exists.
+- [x] Conformance reporting boundary exists; the earlier unused adapter ABC was later removed because no concrete conformance consumer used it.
 - [x] Report output follows the normative report vocabulary.
 - [x] Unit/conformance tests exist.
 - [x] CI workflow exists.
