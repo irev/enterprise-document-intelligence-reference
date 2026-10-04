@@ -1,0 +1,27 @@
+import os
+
+import psycopg
+import pytest
+
+from scripts.apply_migrations import apply_migrations
+
+
+DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
+pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not configured")
+
+
+def test_migration_runner_is_rerunnable_and_records_checksums():
+    apply_migrations(DSN, __import__("pathlib").Path("migrations"))
+    apply_migrations(DSN, __import__("pathlib").Path("migrations"))
+
+    with psycopg.connect(DSN) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT version, filename, sha256
+                   FROM control_plane.schema_migration
+                   ORDER BY version"""
+            )
+            rows = cursor.fetchall()
+
+    assert [row[0] for row in rows] == ["0001", "0002", "0003", "0004", "0005", "0006"]
+    assert all(len(row[2]) == 64 for row in rows)
