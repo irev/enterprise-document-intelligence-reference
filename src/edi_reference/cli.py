@@ -147,13 +147,13 @@ def main(argv: list[str] | None = None) -> int:
         if not args.yes:
             print("MODEL_PULL_CONFIRMATION_REQUIRED_USE_YES")
             return 2
-        python_executable = runtime_python(args.runtime_root / "paddle-ocr" / args.profile)
-        if not python_executable.is_file():
+        runtime_python_path = runtime_python(args.runtime_root / "paddle-ocr" / args.profile)
+        if not runtime_python_path.is_file():
             print("PADDLE_RUNTIME_NOT_INSTALLED")
             return 2
         try:
             state = warm_paddle_model(
-                python_executable=str(python_executable),
+                python_executable=str(runtime_python_path),
                 model_id=args.model_id,
                 artifact_dir=artifact_dir,
                 source=args.source,
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             service = RuntimeManagementService(load_provider_manifest())
             runtime_dir = args.runtime_root / args.provider / args.profile
-            python_executable = str(
+            planned_python_executable = str(
                 runtime_dir
                 / "venv"
                 / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.provider,
                 args.profile,
                 host,
-                python_executable=python_executable,
+                python_executable=planned_python_executable,
             )
         except ValueError as exc:
             print(str(exc))
