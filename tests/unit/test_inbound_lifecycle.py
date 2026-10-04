@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from edi_reference.adapters.in_memory import InMemoryAcquisitionAudit, StaticApplicationAuthorizer
 from edi_reference.adapters.inbound_memory import InMemoryAtomicAcceptanceStore, InMemoryInboundRepository, InMemoryProcessingDispatcher
-from edi_reference.application.inbound import receive_document
+from edi_reference.application.inbound import IdempotencyConflict, receive_document, request_fingerprint
 from edi_reference.application.ports import AcquiredSource, ApplicationPrincipal
 from edi_reference.domain.ingestion import SourcePolicy
 from edi_reference.domain.integration import InteractionContext
@@ -101,6 +101,7 @@ def test_idempotency_is_scoped_by_application_and_tenant() -> None:
             correlation_id="corr",
             request_id="req",
             idempotency_key="same",
+            request_fingerprint=request_fingerprint(SourceReference(method=AcquisitionMethod.UPLOAD)),
             source_method="UPLOAD",
             status=__import__("edi_reference.domain.inbound", fromlist=["InboundStatus"]).InboundStatus.RECEIVED,
             received_at=FixedClock().now(),
@@ -160,3 +161,34 @@ def test_atomic_acceptance_failure_does_not_persist_accepted_state_or_outbox() -
         )
     assert not store.outbox
     assert all(record.status.value != "ACCEPTED" for record in repository.records.values())
+
+
+def test_same_idempotency_key_with_different_source_is_conflict() -> None:
+    import pytest
+
+    repository = InMemoryInboundRepository()
+    dispatcher = InMemoryProcessingDispatcher()
+    acquirer = StaticAcquirer()
+    common = dict(
+        principal=ApplicationPrincipal("app-a"),
+        context=ctx("conflict-1"),
+        authorizer=StaticApplicationAuthorizer({("app-a", "tenant-a")}),
+        acquirer=acquirer,
+        audit=InMemoryAcquisitionAudit(),
+        repository=repository,
+        dispatcher=dispatcher,
+        policy=SourcePolicy(1024, frozenset({"application/pdf"})),
+        clock=FixedClock(),
+        ids=SequentialIds(),
+    )
+    receive_document(source=SourceReference(method=AcquisitionMethod.UPLOAD), **common)
+    with pytest.raises(IdempotencyConflict, match="IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST"):
+        receive_document(
+            source=SourceReference(
+                method=AcquisitionMethod.SIGNED_URL,
+                resource_locator="https://trusted.example/document",
+            ),
+            **common,
+        )
+    assert acquirer.calls == 1
+    assert len(dispatcher.items) == 1
