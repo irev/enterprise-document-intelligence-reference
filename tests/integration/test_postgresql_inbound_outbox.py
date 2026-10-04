@@ -6,7 +6,7 @@ import pytest
 from edi_reference.adapters.postgresql_inbound import PostgreSqlInboundStore
 from edi_reference.domain.inbound import InboundRecord, InboundStatus
 from edi_reference.domain.outbox import OutboxMessage
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 
 DSN = os.getenv("EDI_TEST_POSTGRES_DSN")
 pytestmark = pytest.mark.skipif(not DSN, reason="EDI_TEST_POSTGRES_DSN not configured")
@@ -38,7 +38,7 @@ def record(status=InboundStatus.ACQUIRING):
 
 def observation(observation_id="observation-atomic"):
     now = datetime.now(UTC)
-    return ScopedObservation(
+    return SourceObservation(
         observation_id, "inbound-atomic", "atomic-tenant", "atomic-app",
         "b" * 64, 1234, "application/pdf", now,
     )
