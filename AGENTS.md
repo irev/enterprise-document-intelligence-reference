@@ -54,3 +54,13 @@ For each change:
 - validate machine-readable artifacts when changed;
 - do not claim checks that were not executed;
 - report contract/version impact when behavior changes.
+
+Run tests with the repository virtual environment interpreter, never the system
+Python (the system interpreter has neither pytest nor the editable install):
+
+    .venv/bin/python -m pytest            # macOS / Linux
+    .venv\Scripts\python.exe -m pytest    # Windows
+
+Integration tests additionally require `EDI_TEST_POSTGRES_DSN` and the files in
+`migrations/` applied in order; without them they are reported as skipped, not
+passed.
