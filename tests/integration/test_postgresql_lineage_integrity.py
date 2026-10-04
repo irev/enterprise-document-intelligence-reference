@@ -163,3 +163,40 @@ def test_processing_claim_cannot_bind_observation_from_another_scope():
                                CURRENT_TIMESTAMP,1,'integrity-obs')""",
                     ("a" * 64,),
                 )
+
+
+def test_processing_claim_cannot_bind_wrong_observation_digest():
+    import psycopg
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            seed_lineage(cursor)
+            cursor.execute(
+                """INSERT INTO ingestion.inbound_request
+                   (inbound_id, tenant_id, application_id, correlation_id, request_id,
+                    idempotency_key, request_fingerprint, source_method, status,
+                    received_at, updated_at, observation_sha256)
+                   VALUES ('integrity-digest-inbound','integrity-a','app-a','corr','req',
+                           'integrity-digest-idem',%s,'UPLOAD','ACCEPTED',
+                           CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,%s)""",
+                ("e" * 64, "a" * 64),
+            )
+            cursor.execute(
+                """INSERT INTO integration.outbox_message
+                   (message_id, tenant_id, application_id, correlation_id, aggregate_id,
+                    message_type, payload_ref, created_at, observation_id)
+                   VALUES ('integrity-digest-message','integrity-a','app-a','corr',
+                           'integrity-digest-inbound','PROCESS_DOCUMENT',%s,
+                           CURRENT_TIMESTAMP,'integrity-obs')""",
+                ("sha256:" + "a" * 64,),
+            )
+            with pytest.raises(psycopg.errors.ForeignKeyViolation):
+                cursor.execute(
+                    """INSERT INTO processing.processing_claim
+                       (message_id, processing_run_id, tenant_id, application_id,
+                        observation_sha256, status, claimed_at, lease_until,
+                        claim_generation, observation_id)
+                       VALUES ('integrity-digest-message','integrity-digest-run',
+                               'integrity-a','app-a',%s,'CLAIMED',CURRENT_TIMESTAMP,
+                               CURRENT_TIMESTAMP,1,'integrity-obs')""",
+                    ("f" * 64,),
+                )
