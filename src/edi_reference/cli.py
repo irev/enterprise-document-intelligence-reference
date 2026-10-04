@@ -7,11 +7,10 @@ import json
 import platform
 import shutil
 import subprocess
-import sys
 from dataclasses import asdict, dataclass
 
-from edi_reference.application.paddle_install import build_paddle_install_plan
 from edi_reference.application.provider_manifest import load_provider_manifest
+from edi_reference.application.runtime_management import RuntimeManagementService
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,32 +62,8 @@ def inspect_host() -> HostInfo:
 
 
 def resolve_install(provider: str, profile: str, host: HostInfo) -> dict[str, object]:
-    definition = load_provider_manifest().providers.get(provider)
-    if definition is None:
-        raise ValueError("UNKNOWN_PROVIDER")
-    if profile not in definition.profiles:
-        raise ValueError("UNSUPPORTED_PROVIDER_PROFILE")
-    if profile == "nvidia" and not host.nvidia_smi:
-        raise ValueError("NVIDIA_RUNTIME_NOT_DETECTED")
-    if profile == "mps" and host.os != "darwin":
-        raise ValueError("MPS_REQUIRES_MACOS")
-
-    payload: dict[str, object] = {
-        "provider": provider,
-        "profile": profile,
-        "host": asdict(host),
-        "execution": "isolated-runtime",
-        "status": "PLANNED",
-    }
-    if provider == "paddle-ocr":
-        paddle = build_paddle_install_plan(
-            python_executable=sys.executable,
-            profile=profile,
-            nvidia_driver_version=host.nvidia_driver_version,
-        )
-        payload["steps"] = [{"name": step.name, "argv": list(step.argv)} for step in paddle.steps]
-        payload["verify_argv"] = list(paddle.verify_argv)
-    return payload
+    service = RuntimeManagementService(load_provider_manifest())
+    return service.plan_install(provider_id=provider, profile=profile, host=host)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -121,16 +96,15 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
-    manifest = load_provider_manifest()
+    service = RuntimeManagementService(load_provider_manifest())
     if args.command == "providers":
-        for provider, definition in manifest.providers.items():
-            print(f"{provider}: {', '.join(definition.profiles)}")
+        for provider in service.providers():
+            print(f"{provider['provider_id']}: {', '.join(provider['profiles'])}")
         return 0
 
     if args.command == "models":
-        for provider, definition in manifest.providers.items():
-            for model in definition.models:
-                print(f"{provider}: {model}")
+        for model in service.models():
+            print(f"{model['provider_id']}: {model['model_id']}")
         return 0
 
     if args.command == "install":
