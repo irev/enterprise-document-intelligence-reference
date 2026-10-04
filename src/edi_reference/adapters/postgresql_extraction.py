@@ -1,12 +1,10 @@
 """PostgreSQL persistence for extracted fields and normalized values."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
-from psycopg.types.json import Jsonb
-
-from edi_reference.domain.extraction import ExtractedField, FieldState
-from edi_reference.domain.normalization import NormalizedField, NormalizedValue
+from edi_reference.domain.normalization import NormalizedField
 
 
 @dataclass(frozen=True, slots=True)
