@@ -20,7 +20,7 @@ def config(**changes):
         provider_id="local-model", config_version="3", enabled=True,
         deployment_zone="trusted-local", engine_ref="document-model-v2",
         secret_ref=None, endpoint_ref="local-inference",
-        tenant_allowlist=frozenset(), application_allowlist=frozenset(),
+        tenant_allowlist=None, application_allowlist=None,
     )
     values.update(changes)
     return ProviderConfiguration(**values)
@@ -57,3 +57,15 @@ def test_tenant_and_application_allowlists_are_enforced():
 def test_duplicate_provider_configuration_is_rejected():
     with pytest.raises(ProviderConfigurationError, match="DUPLICATE_PROVIDER_CONFIGURATION"):
         ProviderConfigurationRegistry((config(), config()))
+
+
+def test_explicit_empty_allowlist_denies_every_tenant():
+    registry = ProviderConfigurationRegistry((config(tenant_allowlist=frozenset()),))
+    with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_TENANT"):
+        resolve_provider(PROVIDER, configurations=registry, tenant_id="tenant-a", application_id="app-a")
+
+
+def test_explicit_empty_allowlist_denies_every_application():
+    registry = ProviderConfigurationRegistry((config(application_allowlist=frozenset()),))
+    with pytest.raises(ProviderConfigurationError, match="PROVIDER_NOT_ALLOWED_FOR_APPLICATION"):
+        resolve_provider(PROVIDER, configurations=registry, tenant_id="tenant-a", application_id="app-a")
