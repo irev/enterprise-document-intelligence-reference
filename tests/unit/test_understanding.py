@@ -2,7 +2,7 @@ import pytest
 
 from edi_reference.adapters.understanding_fake import SyntheticParser
 from edi_reference.application.understanding import ParserError, understand_document
-from edi_reference.domain.lineage import ScopedObservation
+from edi_reference.domain.lineage import SourceObservation
 from edi_reference.domain.understanding import UnderstandingFailureCode, UnderstandingPolicy
 
 
@@ -16,7 +16,7 @@ POLICY = UnderstandingPolicy(
 
 def observation():
     from datetime import UTC, datetime
-    return ScopedObservation(
+    return SourceObservation(
         observation_id="obs-1", document_id="doc-1", tenant_id="tenant-a",
         application_id="app-a", sha256="a" * 64, byte_length=10,
         detected_media_type="application/pdf", observed_at=datetime(2026, 10, 4, tzinfo=UTC),
