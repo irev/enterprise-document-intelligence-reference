@@ -22,6 +22,10 @@ class PostgreSqlHumanReviewRepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (review.review_id,),
+                )
+                cursor.execute(
                     """SELECT review_version
                        FROM processing.human_review
                        WHERE review_id=%s
