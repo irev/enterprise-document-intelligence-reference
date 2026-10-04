@@ -17,7 +17,7 @@ class PaddleOcrEngine:
     def __init__(self, pipeline: Any | None = None):
         if pipeline is None:
             try:
-                from paddleocr import PaddleOCR
+                from paddleocr import PaddleOCR  # type: ignore[import-not-found]
             except ImportError as exc:
                 raise RuntimeError("PADDLEOCR_NOT_INSTALLED") from exc
             pipeline = PaddleOCR()
