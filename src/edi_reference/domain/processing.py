@@ -24,3 +24,4 @@ class ProcessingClaim:
     claim_generation: int = 1
     completed_at: datetime | None = None
     failure_code: str | None = None
+    observation_id: str | None = None
