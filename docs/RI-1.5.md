@@ -53,3 +53,23 @@ Secrets and raw document contents are excluded.
 - control-panel HTTP/UI.
 
 Those are implementation adapters or later lifecycle concerns and must not be hidden inside the domain model.
+
+
+## Durable inbound lifecycle foundation
+
+The reference implementation now defines a repository/dispatcher boundary:
+
+```text
+RECEIVED -> ACQUIRING -> ACCEPTED
+                       -> REJECTED
+                       -> UNSUPPORTED
+                       -> FAILED
+
+ACCEPTED -> ProcessingDispatch
+```
+
+Submission requires both `request_id` and `idempotency_key`. Idempotency is scoped by `(tenant_id, application_id, idempotency_key)`; replay returns the existing inbound record and MUST NOT reacquire or redispatch the document.
+
+The current repository and dispatcher are deterministic in-memory adapters used to prove semantics. They are not a production durability claim. A production adapter must preserve the same uniqueness and state-transition behavior using its chosen durable technology.
+
+The processing dispatch carries content identity (SHA-256) and correlation identities, not source document bytes.
