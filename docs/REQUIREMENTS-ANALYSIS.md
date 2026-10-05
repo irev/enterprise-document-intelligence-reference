@@ -153,7 +153,7 @@ Entry point `edi = "edi_reference.cli:main"` (`pyproject.toml:14-15`). Complete 
 | `edi models pull <model_id>` | `--profile` (default `cpu`), `--source {HUGGINGFACE,BOS}`, `--yes`, `--runtime-root`, `--model-root` | model-state |
 | `edi models verify <model_id>` | `--model-root` | verification result |
 | `edi install` | `--provider`, `--profile` (config defaults; required otherwise), `--dry-run`, `--yes`, `--model`, `--model-source`, `--runtime-root`, `--model-root` | plan / install result, optionally `{"install":..., "model":...}` |
-| `edi serve list/recommend/plan/install` | `--server`, `--via {auto,native,docker}`, `--model`, `--yes`, `--json`, roots | registry / advisory verdicts / typed vector / install result |
+| `edi serve list/recommend/plan/install` | `--server`, `--via {auto,native,docker}`, `--gpu {auto,on,off}`, `--variant {desktop,headless}` (lmstudio docker), `--model`, `--yes`, `--json`, roots | registry / advisory verdicts / typed vector (+ `start_hint`) / install result |
 | `edi process <path>` | `--profile`, `--model`, `--runtime-root`, `--model-root`, `--log`, `--timeout` | JSON page-analysis report + JSONL processing log |
 | `edi api [request]` | JSON request argument or stdin | `{ok, operation, result\|error}` envelope |
 
