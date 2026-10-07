@@ -37,6 +37,16 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 ```
 
+One-shot bootstrap (same steps in a single command, `--force` to rebuild an
+existing venv, `--check` to add `pytest` + `edi doctor`):
+
+```bash
+scripts/bootstrap.sh              # Linux/macOS
+```
+```powershell
+.\scripts\bootstrap.ps1           # Windows PowerShell
+```
+
 Verify:
 
 ```text

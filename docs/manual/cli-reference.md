@@ -212,25 +212,33 @@ Detects, recommends, plans, and installs local inference servers — `ollama` (p
 argument vectors; the commands never accept shell strings or image references.
 
 ```text
-edi serve list [--json]
+edi serve list [--json] [--runtime-root PATH]
 edi serve recommend [--json]
-edi serve plan --server ID [--via auto|native|docker] [--model MODEL_ID]
+edi serve plan --server ID [--via auto|native|docker] [--gpu auto|on|off]
+               [--variant desktop|headless] [--model MODEL_ID]
                [--runtime-root PATH] [--model-root PATH]
-edi serve install --server ID [--via auto|native|docker] [--model MODEL_ID] [--yes]
+edi serve install --server ID [--via auto|native|docker] [--gpu auto|on|off]
+                  [--variant desktop|headless] [--model MODEL_ID] [--yes]
                   [--runtime-root PATH] [--model-root PATH]
 ```
 
 - **`list`** — registry, default port, Docker image (LM Studio's
-  `linuxserver/lm-studio` is a **community image**, labelled as such), PATH detection
-  (`INSTALLED` / `NOT_INSTALLED` / `UNKNOWN`), and native-vector availability for this
-  OS (`AUTOMATED` / `MANUAL` / `UNSUPPORTED` / `ALREADY_INSTALLED`).
+  `linuxserver/lm-studio` is a **community image**, labelled as such), detection
+  (`INSTALLED` / `NOT_INSTALLED` / `UNKNOWN` — PATH probe first, then the runtime
+  binary under `--runtime-root`, then a `READY` `install-state.json`), and
+  native-vector availability for this OS (`AUTOMATED` / `MANUAL` / `UNSUPPORTED` /
+  `ALREADY_INSTALLED`).
 - **`recommend`** — advisory tier verdicts from `runtime/tiers.toml`
   (`RECOMMENDED` / `NOT_RECOMMENDED` / `UNKNOWN`). Advisory only: it never selects
   providers or execution paths; provider selection stays in `ProcessingProfile →
   ExecutionPolicy → ExecutionPlan`.
 - **`plan`** — read-only preview of the install vector (native argv or Docker run
-  argv + image + verify). Manual vectors (Ollama on Linux, LM Studio everywhere) return
-  `automated: false` with `instructions` and their `error_code`.
+  argv + image + verify) plus a `start_hint` describing how to start the server
+  after install. Manual vectors (LM Studio native) return `automated: false` with
+  `instructions` and their `error_code`. Ollama on Linux is an automated native
+  vector: a trusted stdlib bootstrap (`python -m edi_reference.application.server_bootstrap
+  ollama <runtime-root>/ollama/native`) downloads the vendor user-space tarball into
+  `.edi/runtimes/` — no sudo, no shell.
 - **`install`** — requires `--yes` (API equivalent: `serve.execute` with
   `confirm: true`). Executes the vector, verifies (`ollama --version`, import check,
   or `docker inspect` → `running`), and writes `install-state.json` under
@@ -244,6 +252,15 @@ toolkit — no silent CPU degradation), `VLLM_REQUIRES_GPU`, `VLLM_UNSUPPORTED_O
 (vLLM native install is Linux-only; use `--via docker` elsewhere),
 `INSTALL_VECTOR_UNSUPPORTED`, `INSTALL_VECTOR_NOT_AUTOMATED`,
 `INVALID_MODEL_ID` (vLLM requires `org/model` from `--model`).
+
+`--gpu` expresses GPU intent for the vector: `auto` (default — GPU only when the host
+probe reports NVIDIA, same fail-closed behavior as before), `on` (require the GPU and
+the container toolkit, fail closed otherwise), `off` (explicit CPU vector: no
+`--gpus=all`, toolkit probe skipped; vLLM still fails closed with `VLLM_REQUIRES_GPU`
+because it is a GPU-only server). `--variant` selects the LM Studio Docker image —
+`desktop` (default, `linuxserver/lm-studio` GUI) or `headless` (`lmstudio/llmster-preview`
+API-only) — and is rejected with `INVALID_PARAMS` for other servers or non-Docker
+vectors.
 
 ## `edi process <path>`
 
@@ -320,10 +337,10 @@ Response: `{"ok": true, "operation": ..., "result": {...}}` on success (exit 0),
 | `models.verify` | `model_id`, `model_root?` | |
 | `models.pull` | `model_id`, `profile?`, `source?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Missing confirm → `CONFIRMATION_REQUIRED`. |
 | `status.summary` | `runtime_root?`, `model_root?` | Same payload as `edi ps --json`. |
-| `serve.list` | — | Same payload as `edi serve list --json`. |
+| `serve.list` | `runtime_root?` | Same payload as `edi serve list --json`. |
 | `serve.recommend` | — | Same payload as `edi serve recommend --json` (advisory). |
-| `serve.plan` | `server_id`, `via?` (`auto`\|`native`\|`docker`), `model?`, `runtime_root?`, `model_root?` | Read-only plan; unknown `via` → `INVALID_PARAMS`. |
-| `serve.execute` | `server_id`, `via?`, `model?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Same gates as `edi serve install`; identifiers only. |
+| `serve.plan` | `server_id`, `via?` (`auto`\|`native`\|`docker`), `gpu?` (`auto`\|`on`\|`off`), `variant?` (`desktop`\|`headless`), `model?`, `runtime_root?`, `model_root?` | Read-only plan; unknown `via`/`gpu`/`variant` → `INVALID_PARAMS`. |
+| `serve.execute` | `server_id`, `via?`, `gpu?`, `variant?`, `model?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Same gates as `edi serve install`; identifiers only. |
 | `install.plan` | `provider_id`, `profile`, `runtime_root?` | Read-only plan. |
 | `install.execute` | `provider_id`, `profile`, **`confirm: true`**, `model?`, `model_source?`, `runtime_root?`, `model_root?` | Same gates as `edi install`; identifiers only. |
 | `process.file` | `path`, `profile?`, `model?`, `runtime_root?`, `model_root?`, `log?`, `timeout?` | Same report as `edi process`. |
@@ -348,12 +365,16 @@ edi web [--bind 127.0.0.1] [--port 4099] [--runtime-root PATH]
 | `--port` | `4099`, or config `web_port` | Listen port (`0` picks a free port). |
 | `--runtime-root` | `.edi/runtimes` | Root used when resolving install plans. |
 
-Serves `GET /` (HTML, two pages: Overview and Install), `GET
-/admin/runtime/{host,providers,models}`, plan
-`POST /admin/runtime/providers/{id}/install-plans`, and the confirm-gated execution
-routes `POST /admin/runtime/providers/{id}/install` and `POST
-/admin/runtime/models/{id}/pull` (body must carry `{"confirm": true}`, else
-`400 CONFIRMATION_REQUIRED`; the panel sends it automatically from the Install page).
+Serves `GET /` (HTML, three pages: Overview, Servers, and Install), the read routes
+`GET /admin/runtime/{host,status,providers,models,servers}` and
+`GET /admin/runtime/servers/recommendations`, plan
+`POST /admin/runtime/providers/{id}/install-plans` and
+`POST /admin/runtime/servers/{id}/install-plans`, and the confirm-gated execution
+routes `POST /admin/runtime/providers/{id}/install`, `POST
+/admin/runtime/models/{id}/pull`, and `POST /admin/runtime/servers/{id}/install`
+(body must carry `{"confirm": true}`, else
+`400 CONFIRMATION_REQUIRED`; the panel sends it automatically from the Install and
+Servers pages).
 Verify routes answer `403 RESERVED_OPERATION`. Prints the listening URL; stop with
 Ctrl+C. Details: [Web control panel](web-panel.md).
 
@@ -369,8 +390,6 @@ The following appear in `../REQUIREMENTS-ANALYSIS.md` as gaps — do not expect 
 - Data-plane commands (submit, review, worker run, batch queues) — planned;
   `edi process` covers single-file OCR processing with audit logging, and the durable
   pipeline remains library entry points only.
-- Web-panel routes for `status.summary` and the `serve.*` operations (the API
-  operations exist; the local panel does not route them yet) — planned.
 
 ## See also
 

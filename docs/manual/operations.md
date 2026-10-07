@@ -18,7 +18,7 @@ endpoint yet. See `../REQUIREMENTS-ANALYSIS.md` §3.3 (gap G5).
 | Schema migrations | `python scripts/apply_migrations.py --dsn ...` | current (not an `edi` command) |
 | Single-file document processing with page audit | `edi process <file>` → JSON report + JSONL processing log | current |
 | Standard JSON input/output API | `edi api` (stdin/stdout request-response) | current |
-| Web panel (read + confirm-gated install) | `edi web --port 4099 [--bind ...]` (local `http.server`) | current (Overview reads, Install page, verify ops reserved) |
+| Web panel (read + confirm-gated install/serve) | `edi web --port 4099 [--bind ...]` (local `http.server`) | current (Overview: doctor/status/catalog, Servers: serve list/recommend/plan/install, Install page, verify ops reserved) |
 | Full pipeline submit/review | library code + PostgreSQL | **planned** as commands/service |
 | Human review | library code + `human_review` tables | **planned** as commands/panel |
 | Outbound delivery | `outbox_message` state machine (`DELIVERED`/`RETRY_PENDING`/`FAILED`) | **planned** inspection tooling |

@@ -2,13 +2,16 @@
 
 Stdlib only (``http.server``); no framework dependency. Routes mirror
 ``docs/RUNTIME-CONTROL-PLANE.md``: read-only views
-(``GET /admin/runtime/{host,providers,models}``), plan
-(``POST /admin/runtime/providers/{id}/install-plans``), and confirm-gated
+(``GET /admin/runtime/{host,providers,models,status,servers}`` plus
+``GET /admin/runtime/servers/recommendations``), plan
+(``POST /admin/runtime/providers/{id}/install-plans``,
+``POST /admin/runtime/servers/{id}/install-plans``), and confirm-gated
 execution (``POST .../install``, ``POST .../pull`` with ``{"confirm": true}`` —
 equivalent of ``--yes``). Verify routes answer ``403 RESERVED_OPERATION``.
 Every route delegates to the same stdio API operation used by ``edi api`` —
 never a second implementation, never an executable path or shell string from
-the client.
+the client. Views render only data returned by those operations; there is no
+mock or placeholder content.
 """
 
 from __future__ import annotations
@@ -94,22 +97,35 @@ def handle_request(
             "/admin/runtime/host": "doctor",
             "/admin/runtime/providers": "providers.list",
             "/admin/runtime/models": "models.list",
+            "/admin/runtime/status": "status.summary",
+            "/admin/runtime/servers": "serve.list",
+            "/admin/runtime/servers/recommendations": "serve.recommend",
         }
     }
     operation = read_only.get(method, {}).get(route)
     if operation is None:
-        known_post = {"/admin/runtime/host", "/admin/runtime/providers", "/admin/runtime/models"}
+        known_post = {
+            "/admin/runtime/host",
+            "/admin/runtime/providers",
+            "/admin/runtime/models",
+            "/admin/runtime/status",
+            "/admin/runtime/servers",
+            "/admin/runtime/servers/recommendations",
+        }
         if route in known_post:
             return 405, JSON_TYPE, json.dumps(_envelope("METHOD_NOT_ALLOWED")).encode(
                 "utf-8"
             )
         return 404, JSON_TYPE, json.dumps(_envelope("NOT_FOUND")).encode("utf-8")
-    payload, _ = api(json.dumps({"operation": operation, "params": {}}))
+    params: dict[str, object] = (
+        {"runtime_root": runtime_root} if operation == "status.summary" else {}
+    )
+    payload, _ = api(json.dumps({"operation": operation, "params": params}))
     return _status_for(payload), JSON_TYPE, json.dumps(payload).encode("utf-8")
 
 
 def _action_route(route: str) -> tuple[str, str, str] | None:
-    """Map /admin/runtime/{providers|models}/{subject}/{action} to (kind, subject, action)."""
+    """Map /admin/runtime/{providers|models|servers}/{subject}/{action} to (kind, subject, action)."""
     segments = [segment for segment in route.split("/") if segment]
     if len(segments) != 5 or segments[:2] != ["admin", "runtime"]:
         return None
@@ -117,6 +133,8 @@ def _action_route(route: str) -> tuple[str, str, str] | None:
     if kind == "providers" and action in {"install", "install-plans", "verify"}:
         return kind, subject, action
     if kind == "models" and action in {"pull", "verify"}:
+        return kind, subject, action
+    if kind == "servers" and action in {"install", "install-plans", "verify"}:
         return kind, subject, action
     return None
 
@@ -131,6 +149,26 @@ def _execute_action(
     runtime_root: str,
 ) -> tuple[int, str, bytes]:
     """Dispatch a confirm-gated execution route to its shared API operation."""
+    if kind == "servers":
+        server_params: dict[str, object] = {
+            "server_id": subject,
+            "runtime_root": runtime_root,
+        }
+        for key in ("via", "model", "gpu", "variant"):
+            if key in request_body:
+                server_params[key] = request_body[key]
+        if action == "install-plans":
+            operation = "serve.plan"
+        else:  # servers install — confirm-gated execution
+            if request_body.get("confirm") is not True:
+                return 400, JSON_TYPE, json.dumps(_envelope("CONFIRMATION_REQUIRED")).encode(
+                    "utf-8"
+                )
+            operation = "serve.execute"
+            server_params["confirm"] = True
+        payload, _ = api(json.dumps({"operation": operation, "params": server_params}))
+        return _status_for(payload), JSON_TYPE, json.dumps(payload).encode("utf-8")
+
     profile = request_body.get("profile", "cpu" if kind == "models" else None)
     if not isinstance(profile, str) or not profile:
         return 400, JSON_TYPE, json.dumps(_envelope("INVALID_PARAMS")).encode("utf-8")
@@ -239,7 +277,7 @@ PANEL_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EDI Runtime Panel</title>
+<title>EDI Runtime Control Panel</title>
 <style>
 :root {
   --vellum: #f7f5fb; --vellum-dark: #ece9f3; --bg-elevated: #fffefe;
@@ -328,10 +366,6 @@ code { font-family: var(--font-mono); font-size: .85em; background: var(--vellum
 }
 .facts .is-empty { display: block; color: var(--ink-faint); font-style: italic; }
 
-.plan-form {
-  display: grid; grid-template-columns: minmax(160px, 1fr) minmax(140px, .7fr) auto;
-  align-items: end; gap: 14px; padding: 18px 24px 20px;
-}
 .field { display: grid; gap: 6px; color: var(--ink); font-size: .81rem; font-weight: 700; }
 .field select, .field input {
   min-height: 44px; padding: 9px 12px; border: 1px solid #bfb7cb; border-radius: 9px;
@@ -386,6 +420,7 @@ code { font-family: var(--font-mono); font-size: .85em; background: var(--vellum
   list-style: none;
 }
 .stage-list[hidden] { display: none; }
+.field[hidden] { display: none; }
 .stage-list li {
   display: flex; align-items: center; gap: 11px; padding: 11px 24px;
   font-size: .82rem;
@@ -432,7 +467,7 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
 @media (max-width: 640px) {
   .app-header { padding: 0 16px; }
   .brand-copy { display: none; }
-  .plan-form { grid-template-columns: 1fr; }
+  .install-form { grid-template-columns: 1fr; }
   .nav-item { min-height: 40px; padding: 5px 12px; font-size: .78rem; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -453,6 +488,7 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
   </div>
   <nav class="primary-nav" aria-label="Panel sections">
     <button type="button" class="nav-item is-active" data-view="overview">Overview</button>
+    <button type="button" class="nav-item" data-view="servers">Servers</button>
     <button type="button" class="nav-item" data-view="install">Install</button>
   </nav>
   <span class="pill"><span class="pill-dot"></span>LOCAL &middot; CONFIRM-GATED</span>
@@ -460,11 +496,11 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
 <main class="page">
   <div class="inner">
     <section id="view-overview" class="view">
-    <p class="eyebrow">Runtime Control Plane</p>
-    <h1>Runtime Panel</h1>
-    <p class="lede">Read-only views over the same operations as <code>edi</code> &mdash;
-      host, providers, models, and install plans. Execution happens on the
-      Install page with explicit confirmation.</p>
+    <p class="eyebrow">Fleet Readout</p>
+    <h1>Overview</h1>
+    <p class="lede">Read-only host probe, VRAM tier, provider/model/server readiness,
+      and catalog &mdash; every value is a live <code>edi</code> operation response.
+      Execution lives on the Install and Servers pages, confirm-gated.</p>
     <div class="grid">
       <section class="card">
         <div class="card-head">
@@ -472,6 +508,14 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
           <span class="badge">doctor</span>
         </div>
         <div class="card-body"><dl class="facts" id="host"></dl></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <div><h2>Status</h2><p>Fleet readiness from <code>edi ps</code> &mdash;
+            VRAM tier plus runtime, model, and server states.</p></div>
+          <span class="badge">status.summary</span>
+        </div>
+        <div class="card-body"><dl class="facts" id="status"></dl></div>
       </section>
       <section class="card">
         <div class="card-head">
@@ -487,28 +531,84 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
         </div>
         <div class="card-body"><dl class="facts" id="models"></dl></div>
       </section>
-      <section class="card card--plan">
-        <div class="card-head">
-          <div><h2>Install plan</h2>
-            <p>Resolves a trusted, code-owned plan &mdash; creates nothing, executes nothing.</p>
-          </div>
-          <span class="badge">install.plan</span>
-        </div>
-        <form class="plan-form" id="plan-form">
-          <label class="field">Provider
-            <select id="provider"></select>
-          </label>
-          <label class="field">Profile
-            <input id="profile" value="cpu" spellcheck="false" autocomplete="off">
-          </label>
-          <button class="btn" type="submit">Plan</button>
-        </form>
-        <pre class="result" id="plan-result"></pre>
-      </section>
     </div>
-    <p class="note">Default bind 127.0.0.1 &mdash; no authentication. Execution on the
-      Install page is confirm-gated (equivalent of --yes); verify routes answer
-      403 RESERVED_OPERATION.</p>
+    <p class="note">Default bind 127.0.0.1 &mdash; no authentication. Read routes are
+      read-only by construction; verify routes answer 403 RESERVED_OPERATION.</p>
+    </section>
+
+    <section id="view-servers" class="view" hidden>
+      <p class="eyebrow">Local Inference</p>
+      <h1>Inference servers</h1>
+      <p class="lede">Registry, detection, and advisory tier recommendations from
+        <code>edi serve ...</code> &mdash; the same operations as the CLI; every value
+        below is the live API response, nothing is mocked.</p>
+      <div class="grid">
+        <section class="card">
+          <div class="card-head">
+            <div><h2>Registry</h2><p>Declared servers, Docker image, detection, native vector.</p></div>
+            <span class="badge">serve.list</span>
+          </div>
+          <div class="card-body"><dl class="facts" id="s-registry"></dl></div>
+        </section>
+        <section class="card">
+          <div class="card-head">
+            <div><h2>Recommendations</h2><p>Advisory tier verdicts &mdash; never selects providers or execution paths.</p></div>
+            <span class="badge">serve.recommend</span>
+          </div>
+          <div class="card-body"><dl class="facts" id="s-reco"></dl></div>
+        </section>
+        <section class="card card--plan">
+          <div class="card-head">
+            <div><h2>Plan &amp; install</h2>
+              <p>plan &rarr; install with confirmation &mdash; identifiers only, code-owned vector.</p></div>
+            <span class="badge">serve.plan / serve.execute</span>
+          </div>
+          <form class="install-form" id="s-form">
+            <label class="field">Server
+              <select id="s-server"></select>
+            </label>
+            <label class="field">Via
+              <select id="s-via">
+                <option value="auto">auto</option>
+                <option value="native">native</option>
+                <option value="docker">docker</option>
+              </select>
+            </label>
+            <label class="field">GPU
+              <select id="s-gpu">
+                <option value="auto">auto</option>
+                <option value="on">on</option>
+                <option value="off">off (CPU)</option>
+              </select>
+            </label>
+            <label class="field" id="s-variant-field" hidden>Variant
+              <select id="s-variant">
+                <option value="desktop">desktop (GUI)</option>
+                <option value="headless">headless (API)</option>
+              </select>
+            </label>
+            <label class="field">Model id (required for vllm)
+              <input id="s-model" spellcheck="false" autocomplete="off">
+            </label>
+          </form>
+          <div class="install-actions">
+            <button class="btn btn--secondary" id="s-plan" type="button">Plan</button>
+            <button class="btn" id="s-run" type="button">Install</button>
+          </div>
+          <ol class="stage-list" id="s-stages" hidden>
+            <li data-stage="plan"><span class="stage-dot"></span>
+              <span class="stage-name">Plan vector</span><span class="stage-state">pending</span></li>
+            <li data-stage="install"><span class="stage-dot"></span>
+              <span class="stage-name">Install server</span><span class="stage-state">pending</span></li>
+          </ol>
+          <div class="progress" id="s-progress"><div class="progress-bar"></div></div>
+          <pre class="result" id="s-result"></pre>
+        </section>
+      </div>
+      <p class="note">Recommendations are advisory only (runtime/tiers.toml); provider
+        selection keeps flowing ProcessingProfile &rarr; ExecutionPolicy &rarr;
+        ExecutionPlan. Execution is confirm-gated (equivalent of --yes); fail-closed
+        error codes appear verbatim.</p>
     </section>
 
     <section id="view-install" class="view" hidden>
@@ -612,8 +712,10 @@ document.querySelectorAll(".nav-item").forEach((button) => {
     document.querySelectorAll(".nav-item").forEach(
       (item) => item.classList.toggle("is-active", item === button)
     );
-    document.getElementById("view-overview").hidden = button.dataset.view !== "overview";
-    document.getElementById("view-install").hidden = button.dataset.view !== "install";
+    document.querySelectorAll(".view").forEach((view) => {
+      view.hidden = view.id !== "view-" + button.dataset.view;
+    });
+    document.title = button.textContent + " · EDI Runtime Control Panel";
   });
 });
 
@@ -655,6 +757,45 @@ function fillInstallSelects() {
 }
 document.getElementById("i-provider").addEventListener("change", fillModelOptions);
 
+async function loadServers() {
+  const registry = await fetch("/admin/runtime/servers").then(r => r.json());
+  if (registry.ok) {
+    const rows = registry.result.servers;
+    render("s-registry", rows.map((entry) => [
+      entry.display_name,
+      "port " + entry.default_port + " · " + entry.image +
+        (entry.community_image ? " (community)" : "") + " · " +
+        entry.detection.status +
+        (entry.detection.version ? " " + entry.detection.version : "") +
+        " · native " + entry.native_vector,
+    ]));
+    fillOptions(
+      document.getElementById("s-server"),
+      rows,
+      (entry) => entry.server_id,
+      (entry) => entry.display_name
+    );
+    if (typeof syncVariantField === "function") syncVariantField();
+  } else {
+    render("s-registry", [["error", registry.error.code]]);
+  }
+  const reco = await fetch("/admin/runtime/servers/recommendations").then(r => r.json());
+  if (reco.ok) {
+    const data = reco.result;
+    const rows = [[
+      "tier",
+      data.tier + (data.vram_mib === null || data.vram_mib === undefined
+        ? "" : " · " + data.vram_mib + " MiB"),
+    ]];
+    for (const entry of data.recommendations) {
+      rows.push([entry.display_name, entry.verdict + " · " + entry.reasons.join(", ")]);
+    }
+    render("s-reco", rows);
+  } else {
+    render("s-reco", [["error", reco.error.code]]);
+  }
+}
+
 async function load() {
   const host = await fetch("/admin/runtime/host").then(r => r.json());
   if (host.ok) {
@@ -662,18 +803,31 @@ async function load() {
   } else {
     render("host", [["error", host.error.code]]);
   }
+  const status = await fetch("/admin/runtime/status").then(r => r.json());
+  if (status.ok) {
+    const data = status.result;
+    render("status", [
+      ["tier", data.tier + (data.vram_mib === null || data.vram_mib === undefined
+        ? "" : " · " + data.vram_mib + " MiB")],
+      ["providers", data.providers.map(
+        (entry) => entry.provider_id + "/" + entry.profile + ": " + entry.status
+      ).join(", ") || "\u2014"],
+      ["models", data.models.map(
+        (entry) => entry.model_id + ": " + entry.status
+      ).join(", ") || "\u2014"],
+      ["servers", data.servers.map(
+        (entry) => entry.display_name + ": " + entry.status
+      ).join(", ") || "\u2014"],
+    ]);
+  } else {
+    render("status", [["error", status.error.code]]);
+  }
   const providers = await fetch("/admin/runtime/providers").then(r => r.json());
   if (providers.ok) {
     catalog.providers = providers.result.providers;
     render("providers", catalog.providers.map(
       (entry) => [entry.provider_id, entry.profiles.join(", ")]
     ));
-    fillOptions(
-      document.getElementById("provider"),
-      catalog.providers,
-      (entry) => entry.provider_id,
-      (entry) => entry.provider_id
-    );
     fillInstallSelects();
   } else {
     render("providers", [["error", providers.error.code]]);
@@ -688,39 +842,31 @@ async function load() {
   } else {
     render("models", [["error", models.error.code]]);
   }
+  loadServers();
 }
 
-// --- overview: quick plan -----------------------------------------------------
-document.getElementById("plan-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const body = await post(
-    "/admin/runtime/providers/" + enc(document.getElementById("provider").value) +
-      "/install-plans",
-    { profile: document.getElementById("profile").value }
-  );
-  showJson("plan-result", body);
-});
-
-// --- install page: staged flow with progress animation ------------------------
-const stageList = document.getElementById("i-stages");
-const progress = document.getElementById("i-progress");
-const setStage = (name, state) => {
-  const item = stageList.querySelector('[data-stage="' + name + '"]');
+// --- staged flows with progress animation --------------------------------------
+const setStage = (list, name, state) => {
+  const item = list.querySelector('[data-stage="' + name + '"]');
   item.className = state ? "is-" + state : "";
   item.querySelector(".stage-state").textContent = state === "active" ? "running" : state;
 };
-const resetStages = () => {
-  stageList.hidden = false;
-  for (const item of stageList.querySelectorAll("li")) {
+const resetStages = (list) => {
+  list.hidden = false;
+  for (const item of list.querySelectorAll("li")) {
     item.className = "";
     item.querySelector(".stage-state").textContent = "pending";
   }
 };
-const progressOn = (isDownload) => {
-  progress.classList.toggle("is-download", Boolean(isDownload));
-  progress.classList.add("is-active");
+const progressOn = (element, isDownload) => {
+  element.classList.toggle("is-download", Boolean(isDownload));
+  element.classList.add("is-active");
 };
-const progressOff = () => progress.classList.remove("is-active");
+const progressOff = (element) => element.classList.remove("is-active");
+
+// --- install page: provider plan -> install -> model download ------------------
+const stageList = document.getElementById("i-stages");
+const progress = document.getElementById("i-progress");
 
 document.getElementById("i-plan").addEventListener("click", async () => {
   const body = await post(
@@ -739,62 +885,135 @@ document.getElementById("i-run").addEventListener("click", async () => {
   const planButton = document.getElementById("i-plan");
   runButton.disabled = true;
   planButton.disabled = true;
-  resetStages();
+  resetStages(stageList);
   document.getElementById("i-result").textContent = "";
   const collected = {};
   try {
-    setStage("plan", "active");
-    progressOn(false);
+    setStage(stageList, "plan", "active");
+    progressOn(progress, false);
     const plan = await post(
       "/admin/runtime/providers/" + enc(provider) + "/install-plans",
       { profile: profile }
     );
-    progressOff();
+    progressOff(progress);
     if (!plan.ok) {
-      setStage("plan", "failed");
-      setStage("install", "skipped");
-      setStage("model", "skipped");
+      setStage(stageList, "plan", "failed");
+      setStage(stageList, "install", "skipped");
+      setStage(stageList, "model", "skipped");
       showJson("i-result", plan);
       return;
     }
     collected.plan = plan.result;
-    setStage("plan", "done");
+    setStage(stageList, "plan", "done");
 
-    setStage("install", "active");
-    progressOn(false);
+    setStage(stageList, "install", "active");
+    progressOn(progress, false);
     const install = await post(
       "/admin/runtime/providers/" + enc(provider) + "/install",
       { profile: profile, confirm: true }
     );
-    progressOff();
+    progressOff(progress);
     if (!install.ok) {
-      setStage("install", "failed");
-      if (model) setStage("model", "skipped");
+      setStage(stageList, "install", "failed");
+      if (model) setStage(stageList, "model", "skipped");
       showJson("i-result", install);
       return;
     }
     collected.install = install.result;
-    setStage("install", "done");
+    setStage(stageList, "install", "done");
 
     if (!model) {
-      setStage("model", "skipped");
+      setStage(stageList, "model", "skipped");
     } else {
-      setStage("model", "active");
-      progressOn(true);
+      setStage(stageList, "model", "active");
+      progressOn(progress, true);
       const pull = await post(
         "/admin/runtime/models/" + enc(model) + "/pull",
         { profile: profile, confirm: true }
       );
-      progressOff();
+      progressOff(progress);
       if (!pull.ok) {
-        setStage("model", "failed");
+        setStage(stageList, "model", "failed");
         showJson("i-result", pull);
         return;
       }
       collected.model = pull.result;
-      setStage("model", "done");
+      setStage(stageList, "model", "done");
     }
     document.getElementById("i-result").textContent = JSON.stringify(collected, null, 2);
+  } finally {
+    runButton.disabled = false;
+    planButton.disabled = false;
+  }
+});
+
+// --- servers page: plan -> install --------------------------------------------
+const serverStageList = document.getElementById("s-stages");
+const serverProgress = document.getElementById("s-progress");
+const syncVariantField = () => {
+  const isLmstudio = document.getElementById("s-server").value === "lmstudio";
+  const via = document.getElementById("s-via").value;
+  document.getElementById("s-variant-field").hidden = !(isLmstudio && via !== "native");
+};
+document.getElementById("s-server").addEventListener("change", syncVariantField);
+document.getElementById("s-via").addEventListener("change", syncVariantField);
+const serveRequest = () => {
+  const payload = {
+    via: document.getElementById("s-via").value,
+    gpu: document.getElementById("s-gpu").value,
+  };
+  const model = document.getElementById("s-model").value;
+  if (model) payload.model = model;
+  if (!document.getElementById("s-variant-field").hidden) {
+    payload.variant = document.getElementById("s-variant").value;
+  }
+  return payload;
+};
+const servePath = (action) =>
+  "/admin/runtime/servers/" + enc(document.getElementById("s-server").value) + "/" + action;
+
+document.getElementById("s-plan").addEventListener("click", async () => {
+  const body = await post(servePath("install-plans"), serveRequest());
+  showJson("s-result", body);
+});
+
+document.getElementById("s-run").addEventListener("click", async () => {
+  const request = serveRequest();
+  const runButton = document.getElementById("s-run");
+  const planButton = document.getElementById("s-plan");
+  runButton.disabled = true;
+  planButton.disabled = true;
+  resetStages(serverStageList);
+  document.getElementById("s-result").textContent = "";
+  try {
+    setStage(serverStageList, "plan", "active");
+    progressOn(serverProgress, false);
+    const plan = await post(servePath("install-plans"), request);
+    progressOff(serverProgress);
+    if (!plan.ok) {
+      setStage(serverStageList, "plan", "failed");
+      setStage(serverStageList, "install", "skipped");
+      showJson("s-result", plan);
+      return;
+    }
+    setStage(serverStageList, "plan", "done");
+
+    setStage(serverStageList, "install", "active");
+    progressOn(serverProgress, false);
+    const install = await post(
+      servePath("install"),
+      Object.assign({}, request, { confirm: true })
+    );
+    progressOff(serverProgress);
+    if (!install.ok) {
+      setStage(serverStageList, "install", "failed");
+      showJson("s-result", install);
+      return;
+    }
+    setStage(serverStageList, "install", "done");
+    document.getElementById("s-result").textContent = JSON.stringify(
+      { plan: plan.result, install: install.result }, null, 2
+    );
   } finally {
     runButton.disabled = false;
     planButton.disabled = false;
