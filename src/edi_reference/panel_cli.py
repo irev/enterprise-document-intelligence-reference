@@ -37,6 +37,18 @@ def add_parsers(commands, *, runtime_root: Path) -> None:
     serve.add_argument("--api-key-env", default="LM_STUDIO_API_KEY",
                        help="environment variable holding the local model server API key (empty to disable)")
     serve.add_argument("--env-file", type=Path, help="dotenv file to read --api-key-env from; the value is never printed")
+    serve.add_argument("--api-port", type=int,
+                       help="also serve the v1 data-plane API for applications on this port (same bind and TLS)")
+
+    apps = commands.add_parser("app", help="manage applications that use the v1 data-plane API")
+    apps.add_argument("action", choices=("add", "list", "key", "revoke", "disable", "enable"))
+    apps.add_argument("name", nargs="?", help="application id (add/key/disable/enable) or key id (revoke)")
+    apps.add_argument("--tenant", help="tenant id for a new application")
+    apps.add_argument("--display-name")
+    apps.add_argument("--scopes", default="documents:write,documents:read,results:read")
+    apps.add_argument("--rate-per-minute", type=int, default=60)
+    apps.add_argument("--max-queued", type=int, default=100)
+    apps.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
 
     users = commands.add_parser("panel-user", help="manage control-panel users")
     users.add_argument("action", choices=("add", "passwd", "role", "disable", "enable", "list"))
@@ -65,7 +77,10 @@ def _load_env_file(path: Path, name: str) -> None:
 def run(args: argparse.Namespace) -> int:
     if args.command == "panel-user":
         return _users(args)
+    if args.command == "app":
+        return _apps(args)
     import logging
+    import threading
 
     from edi_reference.adapters.control_panel_web import PanelSettings, create_server
 
@@ -80,21 +95,75 @@ def run(args: argparse.Namespace) -> int:
         default_ocr={"det_name": args.ocr_det_name, "det_dir": str(args.ocr_det_dir.resolve()),
                      "rec_name": args.ocr_rec_name, "rec_dir": str(args.ocr_rec_dir.resolve())},
         tls_cert=args.tls_cert, tls_key=args.tls_key, allowed_hosts=tuple(args.allowed_host),
+        api_port=args.api_port,
     )
     try:
-        server, _ = create_server(settings)
+        server, panel = create_server(settings)
     except (ValueError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     scheme = "https" if args.tls_cert else "http"
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
     print(f"tlkdoc control panel on {scheme}://{shown}:{args.port}/  (Ctrl+C to stop)", flush=True)
+    if panel.api_server is not None:
+        threading.Thread(target=panel.api_server.serve_forever, name="api-listener", daemon=True).start()
+        print(f"tlkdoc data-plane API v1 on {scheme}://{shown}:{args.api_port}/v1/", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\ncontrol panel stopped")
     finally:
         server.server_close()
+        if panel.api_server is not None:
+            panel.api.stop()
+            panel.api_server.shutdown()
+            panel.api_server.server_close()
+    return 0
+
+
+def _apps(args) -> int:
+    import re
+
+    from edi_reference.adapters.sqlite_api_store import SqliteApiStore
+    from edi_reference.application.api_service import issue_key
+
+    store = SqliteApiStore(args.state_dir / "api.sqlite3")
+    try:
+        if args.action == "list":
+            for app in store.applications():
+                active = [k["key_id"] for k in app["keys"] if not k["revoked_at"]]
+                state = "disabled" if app["disabled"] else "active"
+                print(f"{app['application_id']}\ttenant={app['tenant_id']}\t{state}\tkeys={','.join(active) or '-'}")
+            return 0
+        if not args.name:
+            raise ValueError("NAME_REQUIRED")
+        if args.action == "add":
+            ident = re.compile(r"[a-z][a-z0-9-]{1,62}")
+            if not args.tenant or not ident.fullmatch(args.tenant) or not ident.fullmatch(args.name):
+                raise ValueError("APPLICATION_AND_TENANT_ID_REQUIRED (lowercase letters, digits, '-')")
+            if store.application(args.name) is not None:
+                raise ValueError("APPLICATION_EXISTS")
+            store.create_application(application_id=args.name, tenant_id=args.tenant, name=args.display_name or args.name,
+                                     default_profile="default", allowed_profiles=["default"],
+                                     rate_per_minute=args.rate_per_minute, max_queued=args.max_queued,
+                                     max_bytes=50 * 1024 * 1024, created_by="cli")
+        elif args.action == "key":
+            key_id, token = issue_key(store, args.name, [s.strip() for s in args.scopes.split(",") if s.strip()],
+                                      created_by="cli")
+            print(f"key_id: {key_id}")
+            print(f"token:  {token}")
+            print("Store this token now; it cannot be shown again.")
+            return 0
+        elif args.action == "revoke":
+            store.revoke_key(args.name)
+        else:
+            store.set_application_disabled(args.name, args.action == "disable")
+    except (ValueError, LookupError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        store.close()
+    print(f"ok: {args.action} {args.name}")
     return 0
 
 

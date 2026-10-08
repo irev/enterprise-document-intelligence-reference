@@ -204,3 +204,33 @@ def test_server_refuses_to_start_without_users(tmp_path):
                              default_ocr={"det_name": "d", "det_dir": "/d", "rec_name": "r", "rec_dir": "/r"})
     with pytest.raises(ValueError, match="NO_PANEL_USERS"):
         create_server(settings)
+
+
+def test_admin_manages_api_applications_and_keys(panel):
+    client, app = panel
+    client.login("op")
+    assert client.request("POST", "/api/apps", {"application_id": "app-x", "tenant_id": "t-1"})[0] == 403
+    client.login("admin")
+    assert client.request("POST", "/api/apps", {"application_id": "Bad Id", "tenant_id": "t-1"})[1]["error"] == "INVALID_APPLICATION_OR_TENANT_ID"
+    assert client.request("POST", "/api/apps", {"application_id": "app-x", "tenant_id": "t-1", "rate_per_minute": 30})[0] == 201
+    assert client.request("POST", "/api/apps", {"application_id": "app-x", "tenant_id": "t-1"})[1]["error"] == "APPLICATION_EXISTS"
+    status, key, _ = client.request("POST", "/api/apps/app-x/keys", {"scopes": ["documents:write", "results:read"]})
+    assert status == 201 and key["token"].startswith(f"tlk_{key['key_id']}.")
+    listing = client.request("GET", "/api/apps")[1]
+    assert key["token"].split(".")[1] not in json.dumps(listing)  # only the hash is stored
+    assert listing["applications"][0]["keys"][0]["scopes"] == ["documents:write", "results:read"]
+    assert client.request("POST", "/api/apps/app-x/keys", {"scopes": ["root"]})[0] == 400
+    assert client.request("POST", f"/api/keys/{key['key_id']}/revoke", {})[0] == 200
+    assert client.request("POST", f"/api/keys/{key['key_id']}/revoke", {})[0] == 404
+    assert key["token"].split(".")[1] not in (app.audit.path.read_text(encoding="utf-8"))
+
+
+def test_api_port_must_differ_from_panel_port(tmp_path):
+    port = free_port()
+    UserStore(tmp_path / "users.json", iterations=1000).upsert("admin", PASSWORD, Role.ADMIN)
+    settings = PanelSettings(host="127.0.0.1", port=port, state_dir=tmp_path, ocr_python=tmp_path, lms_cli=tmp_path,
+                             llm_port=12340, api_key_env=None,
+                             default_profile=ROOT / "deploy/classification-profiles/title-rules-id-en.json",
+                             default_ocr={"det_name": "d", "det_dir": "/d", "rec_name": "r", "rec_dir": "/r"}, api_port=port)
+    with pytest.raises(ValueError, match="API_PORT_MUST_DIFFER_FROM_PANEL_PORT"):
+        create_server(settings)

@@ -57,6 +57,35 @@ Clients open `https://192.168.1.20:8443/`. Every address or name clients type mu
 | `--lms`, `--llm-port` | `~/.lmstudio/bin/lms`, `12340` | LM Studio control and endpoint |
 | `--api-key-env`, `--env-file` | `LM_STUDIO_API_KEY` | where the local model server key is read from |
 
+## 4. Applications (data-plane API v1)
+
+Start the API next to the panel. It uses the same bind address and certificate, on its own port:
+
+```powershell
+tlkdoc serve-panel --bind 0.0.0.0 --port 8443 --api-port 8444 --tls-cert panel.crt --tls-key panel.key `
+  --allowed-host 192.168.1.20:8443 --env-file F:\path\to\.env
+```
+
+Register an application and give it a key (also possible in the panel tab **Aplikasi**):
+
+```powershell
+tlkdoc app add procurement --tenant head-office --display-name "Procurement"
+tlkdoc app key procurement            # prints the token once; store it in the application's secret store
+tlkdoc app list
+tlkdoc app revoke <key_id>            # the application is rejected immediately
+```
+
+Each application sees only its own documents. Open port 8444 in the firewall the same way as the panel port. Each `--allowed-host` value is also accepted on the API port. The contract is served at `https://<host>:8444/v1/openapi.json`. The design is in [`docs/RI-6.0-DATA-PLANE-API-V1.md`](../RI-6.0-DATA-PLANE-API-V1.md).
+
+Minimal client:
+
+```powershell
+$h = @{ Authorization = "Bearer $env:TLKDOC_TOKEN"; "Idempotency-Key" = "invoice-2026-0001" }
+Invoke-RestMethod -Method Post -Uri https://192.168.1.20:8444/v1/documents -Headers $h `
+  -ContentType application/pdf -InFile .\invoice.pdf
+Invoke-RestMethod -Uri https://192.168.1.20:8444/v1/documents/<document_id>/results/latest -Headers @{ Authorization = "Bearer $env:TLKDOC_TOKEN" }
+```
+
 ## Routine checks
 
 - **Ringkasan:** LM Studio running, model loaded, OCR runtime present, OCR models "terverifikasi" (pinned). Use "Pin digest model OCR" under Konfigurasi after installing or changing OCR models.

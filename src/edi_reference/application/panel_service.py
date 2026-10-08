@@ -214,6 +214,7 @@ class PanelService:
         self._queue: deque[Job] = deque()
         self._jobs: dict[str, Job] = {}
         self._cv = threading.Condition()
+        self.processing_lock = threading.RLock()
         self._worker = threading.Thread(target=self._loop, name="panel-worker", daemon=True)
         self._worker.start()
 
@@ -272,14 +273,16 @@ class PanelService:
         return {"pipeline": content, "pipeline_version": pipeline["version"],
                 "title_rules": self.config.get("title_rules"), "schema": self.config.get("extraction_schema")}
 
-    def _ensure_model(self, model: str, job: Job) -> None:
-        status = self.models.status()
-        if not status["running"]:
-            job.say("Starting LM Studio server")
-            self.models.start()
-        if model not in status.get("loaded", []):
-            job.say(f"Loading model {model}")
-            self.models.load(model)
+    def ensure_model(self, model: str, say: Callable[[str], None] = lambda message: None) -> None:
+        """Start the local model server and load `model` when needed (serialized with processing)."""
+        with self.processing_lock:
+            status = self.models.status()
+            if not status["running"]:
+                say("Starting LM Studio server")
+                self.models.start()
+            if model not in status.get("loaded", []):
+                say(f"Loading model {model}")
+                self.models.load(model)
 
     def _ocr_pages(self, document_id: str, content: bytes, media_type: str, snap: dict) -> tuple[OcrResult, str, int, float, bool]:
         ocr_cfg = snap["pipeline"]["ocr"]
@@ -301,6 +304,11 @@ class PanelService:
         return pages.result, pages.text_layer, pages.total_pages, seconds, False
 
     def process_document(self, document_id: str, snap: dict, *, use_llm: bool = True) -> dict:
+        """Run the pipeline once. Serialized: panel and API workers share one OCR/GPU host."""
+        with self.processing_lock:
+            return self._process_document(document_id, snap, use_llm=use_llm)
+
+    def _process_document(self, document_id: str, snap: dict, *, use_llm: bool = True) -> dict:
         meta = self.store.meta(document_id)
         content = self.store.content(document_id)
         pipeline = snap["pipeline"]
@@ -374,7 +382,7 @@ class PanelService:
         snap = self.snapshot()
         job.progress["total"] = len(ids)
         if use_llm:
-            self._ensure_model(snap["pipeline"]["llm"]["model"], job)
+            self.ensure_model(snap["pipeline"]["llm"]["model"], job.say)
         versions = {}
         for document_id in ids:
             if job.cancel.is_set():
@@ -399,7 +407,7 @@ class PanelService:
             snap = self.snapshot(model_override=model, mode_override=mode)
             if model:
                 try:
-                    self._ensure_model(model, job)
+                    self.ensure_model(model, job.say)
                 except Exception as exc:  # noqa: BLE001
                     run["models"][model] = {"error": str(exc) or type(exc).__name__, "summary": summarize([]),
                                             "documents": []}

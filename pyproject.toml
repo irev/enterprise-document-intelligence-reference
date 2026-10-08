@@ -22,6 +22,7 @@ dev = [
   "pytest-cov>=6,<8",
   "ruff>=0.11,<1",
   "mypy>=1.15,<2",
+  "jsonschema>=4.23,<5",
 ]
 postgres = [
   "psycopg[binary]>=3.2,<4",

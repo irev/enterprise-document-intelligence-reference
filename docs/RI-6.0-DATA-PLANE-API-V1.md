@@ -1,12 +1,12 @@
 # RI-6.0 — Data-Plane API v1 (design)
 
-Status: **design proposal**, not implemented. Machine-readable artifacts:
+Status: **phase A implemented** (see §12). Phases B–E remain design. Machine-readable artifacts:
 
-- [`docs/api/openapi-v1.json`](api/openapi-v1.json): HTTP contract (OpenAPI 3.1).
-- [`docs/api/result-v1.schema.json`](api/result-v1.schema.json): result document (JSON Schema 2020-12).
+- [`src/edi_reference/contracts/openapi-v1.json`](../src/edi_reference/contracts/openapi-v1.json): HTTP contract (OpenAPI 3.1), served at `/v1/openapi.json`.
+- [`src/edi_reference/contracts/result-v1.schema.json`](../src/edi_reference/contracts/result-v1.schema.json): result document (JSON Schema 2020-12), served at `/v1/result-v1.schema.json`.
 - [`docs/api/examples/`](api/examples/): example payloads that validate against those schemas.
 
-> **Specification alignment pending.** This design builds on the contracts already in this reference implementation (RI-0.5, RI-1.5/1.6/1.11, RI-3.x, RI-5.x). It has not yet been checked against `irev/enterprise-document-intelligence` (`SPECIFICATION.md`, `NORMATIVE-MAP.md`, schemas, conformance vectors), because that repository was not available. Where the specification defines a result or error schema, the specification wins and this design must be adjusted before implementation.
+> **Specification alignment pending.** This design builds on the contracts already in this reference implementation (RI-0.5, RI-1.5/1.6/1.11, RI-3.x, RI-5.x). It has not yet been checked against `irev/enterprise-document-intelligence` (`SPECIFICATION.md`, `NORMATIVE-MAP.md`, schemas, conformance vectors), because that repository was not available. Where the specification defines a result or error schema, the specification wins and this design must be adjusted. `contracts/specification.py` states that this implementation targets specification 0.9 with **canonical schema 2.0**: `tlkdoc.result/v1` must either become that canonical schema or carry a documented, tested mapping to it.
 
 ## 1. Goal
 
@@ -200,3 +200,25 @@ When this design was written:
 - Ten deliberate contract violations were rejected by the schema: `PRESENT` without evidence, `MISSING` with a value, `UNKNOWN` not marked abstained, a typed class without evidence, `FAILED_SAFE` with a type, a remote model, review not required, a normalized value together with a normalization error, an unknown top-level property, and confidence above 1.
 
 Phase A adds this validation to the test suite.
+
+## 12. Phase A — what is implemented
+
+| Component | Module |
+|---|---|
+| SQLite store: applications, keys (SHA-256 of the secret), documents with a unique idempotency constraint, leased job queue, results that triggers make immutable | `adapters/sqlite_api_store.py` |
+| Key authentication, scopes, ownership, per-application rate and queue limits, upload submission, durable worker, `tlkdoc.result/v1` mapping with normalization, discovery | `application/api_service.py` |
+| `/v1` HTTP(S) listener with RFC 9457 errors, Host check, audit of every call | `adapters/api_v1_web.py` |
+| Contracts served at `/v1/openapi.json` and `/v1/result-v1.schema.json` | `contracts/` |
+| `tlkdoc serve-panel --api-port`, `tlkdoc app add|key|revoke|list|disable|enable`, panel tab **Aplikasi** | `panel_cli.py`, `control_panel_web.py`, `control_panel_static/` |
+
+Behaviour:
+
+- **Shared pipeline.** The API and the panel share one pipeline and one OCR/GPU worker (`PanelService.processing_lock`). Uploaded bytes go into the same content-addressed store; ownership is held by the API document record.
+- **Interrupted work.** A job interrupted by a crash or a model server that is down is retried when its lease expires (15 minutes), up to 3 attempts. After that a `FAILED_SAFE` result with `PROCESSING_ATTEMPTS_EXHAUSTED` is recorded. There is no silent rules-only fallback.
+- **Normalizers.** Only the existing ones are wired: `money.id-ID.IDR`, `date.iso-8601` and `identifier.trimmed`. Other formats keep their raw value with a stable `normalization_error`. For example, `15 Juli 2026` and `September 20, 2026` give `INVALID_DATE_FORMAT`, and `Rp349,000.00` gives `INVALID_MONEY_FORMAT`. Wider normalizers are phase D.
+- **Not yet available:** URL submission (`SOURCE_METHOD_NOT_AVAILABLE`), `reprocess`, processing profiles beyond `default`, and webhooks.
+
+Verification at the time of writing:
+
+- 20 HTTP-level unit tests cover keys, scopes, ownership, idempotency, limits, immutability, crash retry and fail-safe results; every produced result is validated against `result-v1.schema.json`. The panel and CLI application-management tests are separate.
+- A Windows 11 HTTPS smoke run on real local documents submitted four documents as a consumer application. Idempotent replays returned the same id. Processing took 24–45 s for four documents. Classification was `TAX_INVOICE`, `INVOICE`, `UNKNOWN` and `RECEIPT`, and all four results were schema-valid.
