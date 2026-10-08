@@ -51,16 +51,6 @@ The LLMs repeatedly labelled out-of-scope documents as payment documents, so cla
 
 Document text is untrusted model input and is labelled as such in the system instruction. Neither component interprets document text as instructions, routing, schema or authorization. Classification and extracted fields remain predictions and claims, never business authorization.
 
-## Benchmark page
+## Benchmark
 
-`scripts/benchmark_panel.py` is a local operator page for repeating the measurement on your own samples. It runs the same components (PaddleOCR adapter, `TitleRuleClassifier`, `LlmFieldExtractor`, `OpenAICompatibleInvoker`) and needs the PaddleOCR runtime interpreter:
-
-```powershell
-.\.edi\runtimes\paddle-ocr\cpu\venv-win\Scripts\python.exe scripts\benchmark_panel.py --env-file <path-to-.env>
-# open http://127.0.0.1:8765/
-```
-
-- Choose a folder, select documents and optionally label the expected type (`UNKNOWN` for out-of-scope documents).
-- Choose LM Studio models and a classification mode: rules only, rules then LLM, or LLM only. Models are loaded one at a time through the `lms` CLI.
-- Per model it reports classification accuracy, abstentions (`UNKNOWN`), wrong non-abstaining labels, `PRESENT` fields, model values rejected as ungrounded, an independent check of `PRESENT` values against the PDF text layer, and LLM latency. A per-document view lists label, prediction, its source and timings. Field values are not shown.
-- The page binds `127.0.0.1` and rejects foreign `Host` headers. OCR caches, labels and run results are written to `.edi/bench/` (git-ignored). The API key is read from an environment variable or `--env-file` and is never stored in results.
+Repeat the measurement on your own samples in the control panel's **Benchmark** tab (`edi serve-panel`, RI-4.11). It runs the same components on labelled documents and compares models on classification accuracy, abstentions, wrong labels, a text-layer check of `PRESENT` values and latency, without writing official document results.
