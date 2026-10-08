@@ -17,16 +17,21 @@ import ipaddress
 import json
 import re
 import ssl
-import threading
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from edi_reference.adapters.api_v1_web import ApiHTTPServer
+from edi_reference.adapters.api_v1_web import make_handler as make_api_handler
 from edi_reference.adapters.lmstudio_control import LmStudioControl, LmStudioError, gpu_status
+from edi_reference.adapters.normalizers import IdIdrMoneyNormalizer, IsoDateNormalizer, TrimmedIdentifierNormalizer
 from edi_reference.adapters.openai_compatible import OpenAICompatibleInvoker
 from edi_reference.adapters.runtime_ocr import RuntimeOcrEngine, model_dir_digest
+from edi_reference.adapters.sqlite_api_store import SqliteApiStore
+from edi_reference.application.api_service import SCOPES, ApiService, issue_key
+from edi_reference.application.normalization import NormalizationRegistry
 from edi_reference.application.panel_audit import AuditLog, verify_chain
 from edi_reference.application.panel_auth import LoginThrottle, Role, Session, SessionManager, UserStore
 from edi_reference.application.panel_config import KINDS, MODES, ConfigStore
@@ -63,6 +68,7 @@ class PanelSettings:
     tls_cert: Path | None = None
     tls_key: Path | None = None
     allowed_hosts: tuple[str, ...] = ()
+    api_port: int | None = None
 
 
 class HttpError(Exception):
@@ -93,6 +99,15 @@ class Panel:
             models=self.lms, runs_dir=state / "benchmarks",
             on_event=lambda actor, action, **kw: self.audit.record(actor, action, **kw),
         )
+        self.api_store = SqliteApiStore(state / "api.sqlite3")
+        self.api = ApiService(
+            store=self.api_store, panel=self.service,
+            registry=NormalizationRegistry((IdIdrMoneyNormalizer(), IsoDateNormalizer(), TrimmedIdentifierNormalizer())),
+            normalizers={"money": ("money.id-ID.IDR", "1"), "date": ("date.iso-8601", "1"),
+                         "identifier": ("identifier.trimmed", "1")},
+            on_event=lambda actor, action, **kw: self.audit.record(actor, action, **kw),
+        )
+        self.api_server: ApiHTTPServer | None = None
 
     def _pipeline_port(self) -> int:
         return int(self.config.active("pipeline")["llm"]["port"])
@@ -100,8 +115,9 @@ class Panel:
     def _seed_config(self) -> None:
         self.config.seed("title_rules", json.loads(self.settings.default_profile.read_text(encoding="utf-8")))
         self.config.seed("extraction_schema", {"schema_id": "business-document-header", "version": "1", "fields": [
-            {"field_name": name, "value_type": "string"} for name in
-            ("document_number", "document_date", "issuer_name", "recipient_name", "total_amount", "tax_id")]})
+            {"field_name": name, "value_type": value_type} for name, value_type in (
+                ("document_number", "identifier"), ("document_date", "date"), ("issuer_name", "string"),
+                ("recipient_name", "string"), ("total_amount", "money"), ("tax_id", "tax_id"))]})
         self.config.seed("pipeline", {"classification_mode": "rules", "max_pages": 3,
                                       "llm": {"host": "127.0.0.1", "port": self.settings.llm_port,
                                               "model": "google/gemma-4-e2b"},
@@ -483,6 +499,60 @@ def make_handler(panel: Panel):
             self._audit(session, "config.pin_ocr", target=f"pipeline@{version}")
             self._send_json({"version": version}, 201)
 
+        # ------------------------------------------------------------ applications (data-plane API)
+        def apps(self, url, args) -> None:
+            self._require(Role.ADMIN, mutating=False)
+            self._send_json({"applications": panel.api_store.applications(), "scopes": list(SCOPES),
+                             "profiles": ["default"], "api_port": settings.api_port})
+
+        def app_create(self, url, args) -> None:
+            session = self._require(Role.ADMIN, mutating=True)
+            body = _json_body(self)
+            application_id = str(body.get("application_id", ""))
+            tenant_id = str(body.get("tenant_id", ""))
+            ident = re.compile(r"[a-z][a-z0-9-]{1,62}")
+            if not ident.fullmatch(application_id) or not ident.fullmatch(tenant_id):
+                raise HttpError(400, "INVALID_APPLICATION_OR_TENANT_ID")
+            name = str(body.get("name", ""))[:100] or application_id
+            try:
+                limits = {key: int(body.get(key, default)) for key, default in
+                          (("rate_per_minute", 60), ("max_queued", 100), ("max_bytes", 50 * 1024 * 1024))}
+            except (TypeError, ValueError):
+                raise HttpError(400, "INVALID_LIMITS") from None
+            if not (1 <= limits["rate_per_minute"] <= 10_000 and 1 <= limits["max_queued"] <= 100_000
+                    and 1 <= limits["max_bytes"] <= 50 * 1024 * 1024):
+                raise HttpError(400, "INVALID_LIMITS")
+            if panel.api_store.application(application_id) is not None:
+                raise HttpError(409, "APPLICATION_EXISTS")
+            panel.api_store.create_application(application_id=application_id, tenant_id=tenant_id, name=name,
+                                               default_profile="default", allowed_profiles=["default"],
+                                               created_by=session.username, **limits)
+            self._audit(session, "app.create", target=application_id, tenant=tenant_id)
+            self._send_json({"ok": True}, 201)
+
+        def app_key(self, url, args) -> None:
+            session = self._require(Role.ADMIN, mutating=True)
+            scopes = [str(s) for s in _json_body(self).get("scopes", [])]
+            key_id, token = issue_key(panel.api_store, args[0], scopes, created_by=session.username)
+            self._audit(session, "app.key.create", target=args[0], key_id=key_id, scopes=scopes)
+            # Returned exactly once; only the SHA-256 of the secret is stored.
+            self._send_json({"key_id": key_id, "token": token}, 201)
+
+        def app_key_revoke(self, url, args) -> None:
+            session = self._require(Role.ADMIN, mutating=True)
+            panel.api_store.revoke_key(args[0])
+            self._audit(session, "app.key.revoke", target=args[0])
+            self._send_json({"ok": True})
+
+        def app_disable(self, url, args) -> None:
+            session = self._require(Role.ADMIN, mutating=True)
+            disabled = _json_body(self).get("disabled")
+            if not isinstance(disabled, bool):
+                raise HttpError(400, "DISABLED_FLAG_REQUIRED")
+            panel.api_store.set_application_disabled(args[0], disabled)
+            self._audit(session, "app.disable" if disabled else "app.enable", target=args[0])
+            self._send_json({"ok": True})
+
         # ------------------------------------------------------------ admin
         def audit(self, url, args) -> None:
             self._require(Role.ADMIN, mutating=False)
@@ -530,6 +600,10 @@ def make_handler(panel: Panel):
         ("GET", f"/api/config/{NAME}", H.config), ("GET", f"/api/config/{NAME}/versions/{NUM}", H.config_version),
         ("POST", f"/api/config/{NAME}", H.config_save), ("POST", f"/api/config/{NAME}/activate", H.config_activate),
         ("GET", "/api/audit", H.audit), ("GET", "/api/users", H.users), ("POST", "/api/users", H.user_save),
+        ("GET", "/api/apps", H.apps), ("POST", "/api/apps", H.app_create),
+        ("POST", r"/api/apps/([a-z][a-z0-9-]{1,62})/keys", H.app_key),
+        ("POST", r"/api/apps/([a-z][a-z0-9-]{1,62})/disable", H.app_disable),
+        ("POST", r"/api/keys/(k[0-9A-Z]{16})/revoke", H.app_key_revoke),
     )]
 
     def route(method: str, path: str):
@@ -561,18 +635,25 @@ def create_server(settings: PanelSettings) -> tuple[PanelHTTPServer, Panel]:
     panel = Panel(settings)
     if not panel.users.all_users():
         raise ValueError("NO_PANEL_USERS: create an admin with `tlkdoc panel-user add <name> --role ADMIN`")
+    if settings.api_port is not None and settings.api_port == settings.port:
+        raise ValueError("API_PORT_MUST_DIFFER_FROM_PANEL_PORT")
     server = PanelHTTPServer((settings.host, settings.port), make_handler(panel))
+    context = None
     if settings.tls_cert is not None and settings.tls_key is not None:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(str(settings.tls_cert), str(settings.tls_key))
         server.socket = context.wrap_socket(server.socket, server_side=True)
+    if settings.api_port is not None:
+        api_hosts = tuple(host.rsplit(":", 1)[0] + f":{settings.api_port}" for host in settings.allowed_hosts)
+        if settings.host not in ("127.0.0.1", "0.0.0.0", "::"):
+            api_hosts += (f"{settings.host}:{settings.api_port}",)
+        api = ApiHTTPServer((settings.host, settings.api_port), make_api_handler(
+            panel.api, panel.audit, port=settings.api_port, tls=context is not None, allowed_hosts=api_hosts))
+        if context is not None:
+            api.socket = context.wrap_socket(api.socket, server_side=True)
+        panel.api_server = api
+        panel.api.start()
     return server, panel
 
 
-def serve(settings: PanelSettings, stop: threading.Event | None = None) -> None:
-    server, _ = create_server(settings)
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()

@@ -22,7 +22,7 @@ from edi_reference.domain.field_schema import ExtractionSchema, FieldDefinition
 
 KINDS = ("title_rules", "extraction_schema", "pipeline")
 FIELD_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
-VALUE_TYPES = {"string", "date", "money", "identifier"}
+VALUE_TYPES = {"string", "date", "money", "identifier", "tax_id", "number"}
 MODES = ("rules", "rules_then_llm", "llm")
 
 

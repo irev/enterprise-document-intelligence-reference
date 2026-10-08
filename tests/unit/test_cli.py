@@ -76,3 +76,18 @@ def test_program_name_follows_invoked_alias(monkeypatch):
     assert cli._parser().prog == "edi"
     monkeypatch.setattr("sys.argv", ["-m"])
     assert cli._parser().prog == "tlkdoc"
+
+
+def test_app_command_creates_application_and_one_time_key(tmp_path, capsys):
+    from edi_reference import cli
+
+    state = str(tmp_path)
+    assert cli.main(["app", "add", "app-demo", "--tenant", "tenant-demo", "--state-dir", state]) == 0
+    assert cli.main(["app", "key", "app-demo", "--state-dir", state]) == 0
+    out = capsys.readouterr().out
+    token = next(line.split()[1] for line in out.splitlines() if line.startswith("token:"))
+    assert token.startswith("tlk_k")
+    assert cli.main(["app", "list", "--state-dir", state]) == 0
+    listing = capsys.readouterr().out
+    assert "app-demo\ttenant=tenant-demo\tactive" in listing and token.split(".")[1] not in listing
+    assert cli.main(["app", "add", "app-demo", "--tenant", "tenant-demo", "--state-dir", state]) == 2

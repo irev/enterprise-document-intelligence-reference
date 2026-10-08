@@ -452,5 +452,56 @@ async function renderAdmin(root) {
   await Promise.all([drawUsers(), drawAudit()]);
 }
 
-const TABS = { overview: renderOverview, documents: renderDocuments, jobs: renderJobs, benchmark: renderBenchmark, config: renderConfig, admin: renderAdmin };
+// ---------------------------------------------------------------- applications (data-plane API)
+async function renderApps(root) {
+  if (!can("ADMIN")) { put(root, el("p", { class: "bad" }, "Butuh peran ADMIN.")); return; }
+  const tokenHost = el("div");
+  const draw = async () => {
+    const r = await act(() => api("/api/apps"));
+    if (!r) return;
+    const appId = el("input", { placeholder: "id aplikasi, mis. pengadaan", "aria-label": "ID aplikasi" });
+    const tenant = el("input", { placeholder: "id tenant, mis. kantor-pusat", "aria-label": "ID tenant" });
+    const name = el("input", { placeholder: "nama tampilan (opsional)", "aria-label": "Nama" });
+    const rate = el("input", { type: "number", value: "60", min: "1", "aria-label": "Permintaan per menit" });
+    const queued = el("input", { type: "number", value: "100", min: "1", "aria-label": "Maks antre" });
+    const cards = r.applications.map((a) => {
+      const boxes = r.scopes.map((s) => ({ s, cb: el("input", { type: "checkbox", checked: s !== "documents:read:tenant" }) }));
+      return el("div", { class: "card" },
+        el("div", { class: "row" }, el("h2", { class: "grow" }, `${a.name} (${a.application_id})`),
+          el("span", { class: a.disabled ? "bad" : "ok" }, a.disabled ? "nonaktif" : "aktif"),
+          el("button", { class: a.disabled ? "ghost" : "danger", onclick: () => act(() => api(`/api/apps/${a.application_id}/disable`, { method: "POST", body: { disabled: !a.disabled } }), "Disimpan").then(draw) }, a.disabled ? "Aktifkan" : "Nonaktifkan")),
+        el("dl", { class: "kv" }, el("dt", {}, "Tenant"), el("dd", {}, a.tenant_id),
+          el("dt", {}, "Batas"), el("dd", {}, `${a.rate_per_minute} req/menit · ${a.max_queued} antre · ${kb(a.max_bytes)} per dokumen`),
+          el("dt", {}, "Profil"), el("dd", {}, a.allowed_profiles.join(", "))),
+        el("h3", {}, "API key"),
+        a.keys.length ? el("table", {}, el("thead", {}, el("tr", {}, ["Key", "Scope", "Dibuat", "Terakhir dipakai", ""].map((h) => el("th", {}, h)))),
+          el("tbody", {}, a.keys.map((k) => el("tr", {}, el("td", {}, k.key_id), el("td", { class: "small" }, k.scopes.join(", ")),
+            el("td", { class: "small" }, `${fmtTime(k.created_at)} · ${k.created_by}`), el("td", { class: "small" }, fmtTime(k.last_used_at)),
+            el("td", {}, k.revoked_at ? el("span", { class: "mute" }, "dicabut") : el("button", { class: "danger", onclick: () => { if (confirm(`Cabut key ${k.key_id}? Aplikasi yang memakainya langsung ditolak.`)) act(() => api(`/api/keys/${k.key_id}/revoke`, { method: "POST" }), "Key dicabut").then(draw); } }, "Cabut")))))) : el("p", { class: "mute" }, "Belum ada key."),
+        el("div", { class: "row" }, boxes.map(({ s, cb }) => el("label", {}, cb, " " + s)),
+          el("button", { onclick: async () => {
+            const k = await act(() => api(`/api/apps/${a.application_id}/keys`, { method: "POST", body: { scopes: boxes.filter((x) => x.cb.checked).map((x) => x.s) } }));
+            if (!k) return;
+            const box = el("input", { value: k.token, readonly: "readonly", "aria-label": "Token" });
+            put(tokenHost, el("div", { class: "card" }, el("h2", {}, `Token baru untuk ${a.application_id}`),
+              el("p", { class: "warn" }, "Salin sekarang. Token ini tidak akan ditampilkan lagi; yang disimpan hanya hash-nya."), box,
+              el("p", { class: "small mute" }, `Pakai sebagai header: Authorization: Bearer <token>. Key id: ${k.key_id}`)));
+            box.select(); draw();
+          } }, "Buat key")));
+    });
+    put(root, el("div", { class: "split" },
+      el("div", {}, tokenHost, el("div", { class: "card" }, el("h2", {}, "Tambah aplikasi"),
+        el("p", { class: "small mute" }, r.api_port ? `API v1 aktif di port ${r.api_port} (/v1/…).` : "API v1 belum aktif: jalankan serve-panel dengan --api-port."),
+        appId, tenant, name, el("div", { class: "row" }, el("label", {}, "Permintaan/menit"), rate, el("label", {}, "Maks antre"), queued),
+        el("div", { class: "row" }, el("button", { onclick: async () => {
+          const body = { application_id: appId.value.trim(), tenant_id: tenant.value.trim(), name: name.value.trim(), rate_per_minute: +rate.value, max_queued: +queued.value };
+          if (await act(() => api("/api/apps", { method: "POST", body }), "Aplikasi dibuat")) draw();
+        } }, "Simpan aplikasi")),
+        el("p", { class: "small mute" }, "Setiap aplikasi hanya bisa melihat dokumennya sendiri. Scope documents:read:tenant membuka akses ke seluruh dokumen tenant yang sama."))),
+      el("div", {}, cards.length ? cards : el("div", { class: "card mute" }, "Belum ada aplikasi."))));
+  };
+  await draw();
+}
+
+const TABS = { apps: renderApps, overview: renderOverview, documents: renderDocuments, jobs: renderJobs, benchmark: renderBenchmark, config: renderConfig, admin: renderAdmin };
 boot().then(() => { if (!S.me) showLogin(); });
