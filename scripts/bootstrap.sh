@@ -5,7 +5,7 @@
 #
 # Usage:
 #   scripts/bootstrap.sh                     # create/update .venv + install deps
-#   scripts/bootstrap.sh --check             # also run pytest and edi doctor
+#   scripts/bootstrap.sh --check             # also run pytest and tlkdoc doctor
 #   scripts/bootstrap.sh --force             # recreate .venv from scratch
 #   scripts/bootstrap.sh --python /path/to/python3.12
 set -euo pipefail
@@ -21,7 +21,7 @@ usage() {
     cat <<'EOF'
 Usage: scripts/bootstrap.sh [options]
 
-  --check             Run `python -m pytest` and `edi doctor` after install.
+  --check             Run `python -m pytest` and `tlkdoc doctor` after install.
   --force             Recreate .venv even if a valid one exists.
   --python PATH       Interpreter to use (must be Python >= 3.12).
   -h, --help          Show this help.
@@ -136,6 +136,6 @@ cat <<'EOF'
 bootstrap.sh: done.
 Next steps:
   source .venv/bin/activate     # or call .venv/bin/edi directly
-  edi doctor
-  edi config --wizard           # optional one-time defaults
+  tlkdoc doctor
+  tlkdoc config --wizard           # optional one-time defaults
 EOF

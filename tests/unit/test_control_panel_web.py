@@ -81,7 +81,7 @@ class Client:
 def test_static_ui_and_security_headers(panel):
     client, _ = panel
     status, body, response = client.request("GET", "/")
-    assert status == 200 and b"Panel Kontrol EDI" in body
+    assert status == 200 and b"Panel Kontrol tlkdoc" in body
     csp = response.getheader("Content-Security-Policy")
     assert "default-src 'self'" in csp and "unsafe-inline" not in csp
     assert response.getheader("X-Frame-Options") == "DENY"

@@ -11,10 +11,10 @@ PostgreSQL, offline constraints, verification checklist — is
 - Verify the host before anything else:
 
 ```text
-edi doctor
+tlkdoc doctor
 ```
 
-`edi doctor` is a read-only probe. It prints JSON host information including
+`tlkdoc doctor` is a read-only probe. It prints JSON host information including
 `nvidia_gpu` when detected.
 
 ## 2. Bootstrap the core
@@ -38,7 +38,7 @@ python -m pip install -r requirements-dev.txt
 ```
 
 One-shot bootstrap (same steps in a single command, `--force` to rebuild an
-existing venv, `--check` to add `pytest` + `edi doctor`):
+existing venv, `--check` to add `pytest` + `tlkdoc doctor`):
 
 ```bash
 scripts/bootstrap.sh              # Linux/macOS
@@ -52,8 +52,8 @@ Verify:
 ```text
 python -m pytest
 edi --help
-edi providers list
-edi models list
+tlkdoc providers list
+tlkdoc models list
 ```
 
 Never install Paddle/PyTorch/Docling/Surya into this core environment.
@@ -61,12 +61,12 @@ Never install Paddle/PyTorch/Docling/Surya into this core environment.
 Alternative with [uv](https://docs.astral.sh/uv/) (source tree only, no PyPI publish):
 
 ```bash
-uvx --from . edi doctor     # run directly from the checkout
-uv tool install .           # or install `edi` as a tool
+uvx --from . tlkdoc doctor     # run directly from the checkout
+uv tool install .           # or install `tlkdoc` as a tool
 ```
 
 One-time defaults (paths, provider, profile, model, web bind/port) can be stored in
-`.edi/config.json` instead of re-typing flags: `edi config --wizard`
+`.edi/config.json` instead of re-typing flags: `tlkdoc config --wizard`
 (precedence: explicit flag > config > built-in default).
 
 ## 3. Inspect, then install a provider runtime
@@ -74,19 +74,19 @@ One-time defaults (paths, provider, profile, model, web bind/port) can be stored
 Always dry-run first (this creates nothing):
 
 ```text
-edi install --provider paddle-ocr --profile cpu --dry-run
+tlkdoc install --provider paddle-ocr --profile cpu --dry-run
 ```
 
 GPU host (requires a detected driver; fails closed otherwise):
 
 ```text
-edi install --provider paddle-ocr --profile nvidia --dry-run
+tlkdoc install --provider paddle-ocr --profile nvidia --dry-run
 ```
 
 Execute only after reviewing the plan:
 
 ```text
-edi install --provider paddle-ocr --profile cpu --yes
+tlkdoc install --provider paddle-ocr --profile cpu --yes
 ```
 
 The runtime is created under `.edi/runtimes/<provider>/<profile>/venv` with an atomic
@@ -96,8 +96,8 @@ The runtime is created under `.edi/runtimes/<provider>/<profile>/venv` with an a
 ## 4. Provision a model
 
 ```text
-edi models pull pp-ocrv6-medium --profile cpu --yes
-edi models verify pp-ocrv6-medium
+tlkdoc models pull pp-ocrv6-medium --profile cpu --yes
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 `models pull` requires the matching provider profile to be `READY` first. Current model
@@ -118,11 +118,11 @@ Migration and integration-test commands live in `README.md` (Development section
 
 ```text
 python -m pytest
-edi doctor
-edi ps
-edi providers list
-edi models list
-edi models verify pp-ocrv6-medium
+tlkdoc doctor
+tlkdoc ps
+tlkdoc providers list
+tlkdoc models list
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 Then walk the checklist in `INSTALLATION.md` §11. For restricted/offline environments,

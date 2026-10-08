@@ -8,7 +8,7 @@ Stdlib only (``http.server``); no framework dependency. Routes mirror
 ``POST /admin/runtime/servers/{id}/install-plans``), and confirm-gated
 execution (``POST .../install``, ``POST .../pull`` with ``{"confirm": true}`` —
 equivalent of ``--yes``). Verify routes answer ``403 RESERVED_OPERATION``.
-Every route delegates to the same stdio API operation used by ``edi api`` —
+Every route delegates to the same stdio API operation used by ``tlkdoc api`` —
 never a second implementation, never an executable path or shell string from
 the client. Views render only data returned by those operations; there is no
 mock or placeholder content.
@@ -511,7 +511,7 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
       </section>
       <section class="card">
         <div class="card-head">
-          <div><h2>Status</h2><p>Fleet readiness from <code>edi ps</code> &mdash;
+          <div><h2>Status</h2><p>Fleet readiness from <code>tlkdoc ps</code> &mdash;
             VRAM tier plus runtime, model, and server states.</p></div>
           <span class="badge">status.summary</span>
         </div>
@@ -540,7 +540,7 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
       <p class="eyebrow">Local Inference</p>
       <h1>Inference servers</h1>
       <p class="lede">Registry, detection, and advisory tier recommendations from
-        <code>edi serve ...</code> &mdash; the same operations as the CLI; every value
+        <code>tlkdoc serve ...</code> &mdash; the same operations as the CLI; every value
         below is the live API response, nothing is mocked.</p>
       <div class="grid">
         <section class="card">
@@ -623,7 +623,7 @@ li.is-skipped .stage-name { color: var(--ink-faint); font-weight: 400; }
           <div class="card-head">
             <div><h2>Install &amp; download</h2>
               <p>plan &rarr; runtime install &rarr; model download</p></div>
-            <span class="badge">edi install</span>
+            <span class="badge">tlkdoc install</span>
           </div>
           <form class="install-form" id="install-form">
             <label class="field">Provider

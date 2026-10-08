@@ -1,4 +1,4 @@
-# RI-4.11 — Control Panel (`edi serve-panel`)
+# RI-4.11 — Control Panel (`tlkdoc serve-panel`)
 
 ## Objective
 
@@ -18,12 +18,12 @@ Standard library only. No web framework, ORM, queue or cloud SDK. OCR runs in th
 | adapters | `runtime_ocr.py`, `paddle_page_worker.py` | OCR through the runtime interpreter with a fixed argument vector, timeout and pinned model digests |
 | adapters | `lmstudio_control.py` | LM Studio server and model control through the `lms` CLI |
 | adapters | `control_panel_web.py`, `control_panel_static/` | HTTP(S) server, routes, UI |
-| CLI | `panel_cli.py` | `edi serve-panel`, `edi panel-user` |
+| CLI | `panel_cli.py` | `tlkdoc serve-panel`, `tlkdoc panel-user` |
 
 ## Security model
 
 - **Transport.** Binding to anything but loopback requires `--tls-cert` and `--tls-key`; the server refuses to start otherwise. TLS 1.2 minimum. HSTS is sent under TLS.
-- **Authentication.** Username and password; no default account. The server refuses to start until an admin exists (`edi panel-user add <name> --role ADMIN`). Passwords are at least 12 characters, never stored or logged in plaintext. Five failures per username or client address lock both for 15 minutes.
+- **Authentication.** Username and password; no default account. The server refuses to start until an admin exists (`tlkdoc panel-user add <name> --role ADMIN`). Passwords are at least 12 characters, never stored or logged in plaintext. Five failures per username or client address lock both for 15 minutes.
 - **Sessions.** Random 256-bit tokens held only in memory (a restart signs everyone out), cookie `HttpOnly; SameSite=Strict` (+`Secure` under TLS), 30-minute idle and 12-hour absolute expiry. Disabling a user or changing their password or role revokes their sessions.
 - **Request integrity.** Every state-changing request needs the per-session `X-CSRF-Token` header and a same-origin `Origin`. The `Host` header must be one of the configured hosts (DNS-rebinding defence).
 - **Roles.** `VIEWER` reads; `OPERATOR` uploads, labels, processes and benchmarks; `ADMIN` additionally controls LM Studio, configuration, server-side folder import, users and the audit log. Panel roles authorize panel operations only, never business actions on documents.

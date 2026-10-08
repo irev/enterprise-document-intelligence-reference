@@ -4,7 +4,7 @@
 
   Bootstraps the project virtual environment, verifies dev dependencies,
   prints a quick host probe, optionally runs the test suite, then starts the
-  read-only web panel (edi web) until Ctrl+C.
+  read-only web panel (tlkdoc web) until Ctrl+C.
 
 .EXAMPLE
   .\scripts\startup.ps1                          # web panel on 127.0.0.1:4099
@@ -74,9 +74,9 @@ if ($Test) {
 
 # 5. read-only web panel (blocks until Ctrl+C)
 if ($NoWeb) {
-    Write-Host "[startup] done (-NoWeb: skipping edi web)"
+    Write-Host "[startup] done (-NoWeb: skipping tlkdoc web)"
     return 0
 }
 
-Write-Host "[startup] starting edi web on http://${Hostname}:${Port}/ (Ctrl+C to stop)"
+Write-Host "[startup] starting tlkdoc web on http://${Hostname}:${Port}/ (Ctrl+C to stop)"
 & $venvPython -m edi_reference.cli web --hostname $Hostname --port $Port

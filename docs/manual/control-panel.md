@@ -4,16 +4,16 @@ Design and security model: [`docs/RI-4.11-CONTROL-PANEL.md`](../RI-4.11-CONTROL-
 
 ## Prerequisites
 
-- Repository installed (`pip install -e .`), PaddleOCR runtime installed (`edi install --provider paddle-ocr --profile cpu --yes`), OCR model directories available.
+- Repository installed (`pip install -e .`), PaddleOCR runtime installed (`tlkdoc install --provider paddle-ocr --profile cpu --yes`), OCR model directories available.
 - LM Studio with its `lms` CLI for LLM extraction (optional; rules-only processing works without it).
 
 ## 1. Create the first admin
 
 ```powershell
-edi panel-user add admin --role ADMIN
+tlkdoc panel-user add admin --role ADMIN
 # prompts twice for a password of at least 12 characters
-edi panel-user add operator1 --role OPERATOR
-edi panel-user list
+tlkdoc panel-user add operator1 --role OPERATOR
+tlkdoc panel-user list
 ```
 
 Other actions: `passwd`, `role --role VIEWER|OPERATOR|ADMIN`, `disable`, `enable`. Users can also be managed in the panel (Audit & Pengguna tab).
@@ -21,7 +21,7 @@ Other actions: `passwd`, `role --role VIEWER|OPERATOR|ADMIN`, `disable`, `enable
 ## 2. Local use (this PC only)
 
 ```powershell
-edi serve-panel --env-file F:\path\to\.env
+tlkdoc serve-panel --env-file F:\path\to\.env
 # open http://127.0.0.1:8443/
 ```
 
@@ -34,7 +34,7 @@ A certificate and key are required. For a small office, a self-signed certificat
 openssl req -x509 -newkey rsa:2048 -nodes -days 825 -keyout panel.key -out panel.crt `
   -subj "/CN=panel.lan" -addext "subjectAltName=DNS:panel.lan,IP:192.168.1.20"
 
-edi serve-panel --bind 0.0.0.0 --port 8443 --tls-cert panel.crt --tls-key panel.key `
+tlkdoc serve-panel --bind 0.0.0.0 --port 8443 --tls-cert panel.crt --tls-key panel.key `
   --allowed-host 192.168.1.20:8443 --allowed-host panel.lan:8443 --env-file F:\path\to\.env
 ```
 

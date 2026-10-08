@@ -10,8 +10,8 @@ confidentiality rules in `AGENTS.md` apply.
 |---|---|---|
 | [Installation quickstart](installation.md) | Operator | current |
 | [CLI reference](cli-reference.md) | Operator | current |
-| [Day-to-day operations](operations.md) | Operator / integrator | partial — single-file `edi process` + `edi api` current; full submit/review pipeline not yet available |
-| [Web control panel](web-panel.md) | Operator / admin | local read-only panel current (`edi web`); service/auth phases planned |
+| [Day-to-day operations](operations.md) | Operator / integrator | partial — single-file `tlkdoc process` + `tlkdoc api` current; full submit/review pipeline not yet available |
+| [Web control panel](web-panel.md) | Operator / admin | local read-only panel current (`tlkdoc web`); service/auth phases planned |
 | [Troubleshooting index](troubleshooting.md) | Operator | current |
 
 ## Reading order

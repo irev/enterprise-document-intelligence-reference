@@ -1055,6 +1055,11 @@ def run_api_request(text: str) -> tuple[dict[str, object], int]:
     return {"ok": True, "operation": operation, "result": result}, 0
 
 
+def _prog_name() -> str:
+    """`tlkdoc` is the command name; `edi` remains an alias and keeps its own name in help text."""
+    return "edi" if Path(sys.argv[0]).stem.lower() == "edi" else "tlkdoc"
+
+
 def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
     cfg = config if config is not None else LocalConfig()
     default_runtime_root = Path(cfg.runtime_root) if cfg.runtime_root else Path(".edi/runtimes")
@@ -1062,7 +1067,7 @@ def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
     default_log = Path(cfg.log_path) if cfg.log_path else Path(".edi/logs/processing.jsonl")
     default_profile = cfg.profile or "cpu"
     default_source = cfg.model_source or "HUGGINGFACE"
-    parser = argparse.ArgumentParser(prog="edi")
+    parser = argparse.ArgumentParser(prog=_prog_name())
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor")
 
@@ -1213,13 +1218,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         bound_port = server.server_address[1]
         print(
-            f"edi web listening on http://{args.hostname}:{bound_port}/ "
+            f"tlkdoc web listening on http://{args.hostname}:{bound_port}/ "
             "(read-only, no authentication; Ctrl+C to stop)"
         )
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            print("\nedi web stopped")
+            print("\ntlkdoc web stopped")
         finally:
             server.server_close()
         return 0

@@ -1,5 +1,5 @@
 "use strict";
-// Panel Kontrol EDI. All document-derived text is rendered with textContent only.
+// Panel Kontrol tlkdoc. All document-derived text is rendered with textContent only.
 
 const ROLE_RANK = { VIEWER: 1, OPERATOR: 2, ADMIN: 3 };
 const MODE_LABEL = {

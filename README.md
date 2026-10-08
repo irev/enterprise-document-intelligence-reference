@@ -71,6 +71,8 @@ Private material may inform validation privately. Only generalized, sanitized, n
 
 ## Installation
 
+The command-line tool is `tlkdoc`. The former name `edi` still works as an alias.
+
 Use [`INSTALLATION.md`](INSTALLATION.md) for operator installation, isolated PaddleOCR runtime provisioning, model warm/verification, GPU profile selection, and troubleshooting. Usage guidance (quickstart, CLI reference, operations, troubleshooting index) lives in [`docs/manual/`](docs/manual/README.md). Do not install ML provider dependencies into the core development environment.
 
 ## Development
@@ -94,8 +96,8 @@ scripts/bootstrap.sh              # Linux/macOS
 ```
 
 With [uv](https://docs.astral.sh/uv/) installed, the CLI can also be run straight from
-the checkout without activating a virtual environment: `uvx --from . edi doctor`
-(also `uvx --with ".[dev]" pytest`, or `uv tool install .` for a global `edi`).
+the checkout without activating a virtual environment: `uvx --from . tlkdoc doctor`
+(also `uvx --with ".[dev]" pytest`, or `uv tool install .` for a global `tlkdoc`).
 
 PostgreSQL integration tests are conditional. If `EDI_TEST_POSTGRES_DSN` is not set, those tests are **skipped**; a default-suite success therefore does not by itself prove the durable PostgreSQL layer.
 
@@ -179,9 +181,9 @@ python -m pip install -r requirements-dev.txt
 Verify the host and available providers:
 
 ```text
-edi doctor
-edi providers list
-edi models list
+tlkdoc doctor
+tlkdoc providers list
+tlkdoc models list
 ```
 
 ### 2. Inspect, then install PaddleOCR
@@ -189,16 +191,16 @@ edi models list
 CPU:
 
 ```text
-edi install --provider paddle-ocr --profile cpu --dry-run
-edi install --provider paddle-ocr --profile cpu --yes
+tlkdoc install --provider paddle-ocr --profile cpu --dry-run
+tlkdoc install --provider paddle-ocr --profile cpu --yes
 ```
 
 NVIDIA:
 
 ```text
-edi doctor
-edi install --provider paddle-ocr --profile nvidia --dry-run
-edi install --provider paddle-ocr --profile nvidia --yes
+tlkdoc doctor
+tlkdoc install --provider paddle-ocr --profile nvidia --dry-run
+tlkdoc install --provider paddle-ocr --profile nvidia --yes
 ```
 
 Provider dependencies are installed into `.edi/runtimes/paddle-ocr/<profile>/venv`, not the core environment. NVIDIA installation fails closed when a compatible runtime/driver cannot be resolved; it does not silently downgrade to CPU.
@@ -206,8 +208,8 @@ Provider dependencies are installed into `.edi/runtimes/paddle-ocr/<profile>/ven
 ### 3. Provision a governed OCR model
 
 ```text
-edi models pull pp-ocrv6-medium --profile cpu --yes
-edi models verify pp-ocrv6-medium
+tlkdoc models pull pp-ocrv6-medium --profile cpu --yes
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 Use `--profile nvidia` when provisioning against the installed NVIDIA runtime. The current pull operation warms Paddle-managed upstream cache and records provenance as `WARMED / UPSTREAM_CACHE`; it does not yet claim offline-pinned model weights.

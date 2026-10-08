@@ -1,4 +1,4 @@
-"""`edi serve-panel` and `edi panel-user` commands (RI-4.11)."""
+"""`tlkdoc serve-panel` and `tlkdoc panel-user` commands (RI-4.11)."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def run(args: argparse.Namespace) -> int:
         return 2
     scheme = "https" if args.tls_cert else "http"
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
-    print(f"edi control panel on {scheme}://{shown}:{args.port}/  (Ctrl+C to stop)", flush=True)
+    print(f"tlkdoc control panel on {scheme}://{shown}:{args.port}/  (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
