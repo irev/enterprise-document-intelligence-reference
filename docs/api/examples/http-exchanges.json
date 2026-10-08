@@ -1,0 +1,39 @@
+{
+  "description": "Synthetic request/response examples for docs/api/openapi-v1.json. Keys and identifiers are fake.",
+  "submit_upload": {
+    "request": {
+      "method": "POST", "path": "/v1/documents",
+      "headers": {"Authorization": "Bearer tlk_k01J9ZK.SYNTHETIC-SECRET-NOT-REAL", "Content-Type": "application/pdf",
+                  "Idempotency-Key": "po-sync-2026-10-08-0001", "X-Filename": "synthetic-invoice.pdf",
+                  "X-External-Reference": "po_number=PO-SYN-0042"},
+      "body": "<PDF bytes>"
+    },
+    "response": {
+      "status": 202,
+      "headers": {"Location": "/v1/documents/doc_01J9ZK6A1B2C3D4E5F"},
+      "body": {
+        "document_id": "doc_01J9ZK6A1B2C3D4E5F", "status": "ACCEPTED", "status_code": null,
+        "correlation_id": "corr-0001", "processing_profile": "default", "filename": "synthetic-invoice.pdf",
+        "media_type": "application/pdf",
+        "sha256": "3f1b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+        "external_references": {"po_number": "PO-SYN-0042"},
+        "created_at": "2026-10-08T10:14:51Z", "updated_at": "2026-10-08T10:14:51Z",
+        "latest_result_version": null,
+        "links": {"self": "/v1/documents/doc_01J9ZK6A1B2C3D4E5F"}
+      }
+    }
+  },
+  "idempotency_conflict": {
+    "response": {
+      "status": 409,
+      "body": {"type": "https://tlkdoc.local/problems/idempotency-conflict", "title": "Idempotency key reused",
+               "status": 409, "code": "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST", "request_id": "req_01J9ZK8B"}
+    }
+  },
+  "webhook": {
+    "headers": {"Tlkdoc-Event": "document.completed", "Tlkdoc-Delivery": "dlv_01J9ZK7R",
+                "Tlkdoc-Signature": "t=1791454502,v1=5d41402abc4b2a76b9719d911017c5925d41402abc4b2a76b9719d911017c592"},
+    "body": {"event": "document.completed", "document_id": "doc_01J9ZK6A1B2C3D4E5F", "result_version": 2,
+             "status": "COMPLETED", "correlation_id": "corr-0001", "occurred_at": "2026-10-08T10:15:02Z"}
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema": "tlkdoc.result/v1",
+  "result_id": "res_01J9ZM2A3B4C5D6E7F",
+  "result_version": 1,
+  "document_id": "doc_01J9ZM1Z2Y3X4W5V6U",
+  "tenant_id": "tenant-synthetic",
+  "application_id": "app-procurement-demo",
+  "processing_run_id": "run_01J9ZM2G7H8J9K0L1M",
+  "correlation_id": "corr-0002",
+  "status": "FAILED_SAFE",
+  "failure": {"code": "OCR_TIMEOUT"},
+  "created_at": "2026-10-08T10:20:44Z",
+  "source": {
+    "sha256": "9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9",
+    "media_type": "image/tiff",
+    "byte_length": 4820133,
+    "pages_total": null,
+    "pages_processed": 0,
+    "filename": "synthetic-scan.tif"
+  },
+  "classification": {
+    "document_type": "UNKNOWN",
+    "abstained": true,
+    "method": "NONE",
+    "taxonomy": {"id": "business-documents", "version": "business-documents-1"},
+    "classifier": {"id": "title-rules/title-rules-id-en", "version": "1"},
+    "confidence": null,
+    "evidence": []
+  },
+  "fields": [],
+  "provenance": {
+    "processing_profile": {"id": "default", "version": 1},
+    "configuration": {"pipeline": 3, "title_rules": 1, "extraction_schema": 1},
+    "ocr": {"engine": "paddleocr", "models": ["PP-OCRv3_mobile_det", "en_PP-OCRv4_mobile_rec"], "model_digests_pinned": true},
+    "model": null
+  },
+  "review": {"required": true, "status": "NOT_REVIEWED"},
+  "notice": "Machine result. Not a business approval or authorization."
+}
