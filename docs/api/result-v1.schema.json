@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tlkdoc.local/schemas/result-v1.schema.json",
+  "title": "tlkdoc processing result v1",
+  "description": "One immutable machine result produced by one processing run (RI-6.0). Design proposal; specification alignment pending.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "result_id", "result_version", "document_id", "tenant_id", "application_id",
+               "processing_run_id", "correlation_id", "status", "failure", "created_at", "source",
+               "classification", "fields", "provenance", "review", "notice"],
+  "properties": {
+    "schema": {"const": "tlkdoc.result/v1"},
+    "result_id": {"$ref": "#/$defs/id", "pattern": "^res_[0-9A-Za-z]{10,40}$"},
+    "result_version": {"type": "integer", "minimum": 1},
+    "document_id": {"$ref": "#/$defs/id", "pattern": "^doc_[0-9A-Za-z]{10,40}$"},
+    "tenant_id": {"$ref": "#/$defs/id"},
+    "application_id": {"$ref": "#/$defs/id"},
+    "processing_run_id": {"$ref": "#/$defs/id", "pattern": "^run_[0-9A-Za-z]{10,40}$"},
+    "correlation_id": {"$ref": "#/$defs/id"},
+    "status": {"enum": ["COMPLETED", "FAILED_SAFE"]},
+    "failure": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "object", "additionalProperties": false, "required": ["code"],
+         "properties": {"code": {"$ref": "#/$defs/code"}}}
+      ]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "media_type", "byte_length", "pages_total", "pages_processed"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "media_type": {"enum": ["application/pdf", "image/png", "image/jpeg", "image/tiff"]},
+        "byte_length": {"type": "integer", "minimum": 1},
+        "pages_total": {"type": ["integer", "null"], "minimum": 1},
+        "pages_processed": {"type": "integer", "minimum": 0},
+        "filename": {"type": ["string", "null"], "maxLength": 200},
+        "external_references": {
+          "type": "object", "maxProperties": 10,
+          "additionalProperties": {"type": "string", "maxLength": 200}
+        }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_type", "abstained", "method", "taxonomy", "classifier", "confidence", "evidence"],
+      "properties": {
+        "document_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
+        "abstained": {"type": "boolean"},
+        "method": {"enum": ["TITLE_RULE", "LLM_GROUNDED", "NONE"]},
+        "taxonomy": {"$ref": "#/$defs/versioned"},
+        "classifier": {"$ref": "#/$defs/versioned"},
+        "confidence": {"$ref": "#/$defs/confidence"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}, "maxItems": 20},
+        "alternatives": {
+          "type": "array", "maxItems": 10,
+          "items": {"type": "object", "additionalProperties": false, "required": ["document_type", "confidence"],
+                    "properties": {"document_type": {"type": "string"}, "confidence": {"$ref": "#/$defs/confidence"}}}
+        }
+      },
+      "allOf": [
+        {"if": {"properties": {"document_type": {"const": "UNKNOWN"}}},
+         "then": {"properties": {"abstained": {"const": true}}},
+         "else": {"properties": {"abstained": {"const": false}, "evidence": {"minItems": 1}}}}
+      ]
+    },
+    "fields": {"type": "array", "items": {"$ref": "#/$defs/field"}, "maxItems": 200},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["processing_profile", "configuration", "ocr", "model"],
+      "properties": {
+        "processing_profile": {
+          "type": "object", "additionalProperties": false, "required": ["id", "version"],
+          "properties": {"id": {"$ref": "#/$defs/id"}, "version": {"type": "integer", "minimum": 1}}
+        },
+        "configuration": {
+          "type": "object", "additionalProperties": {"type": "integer", "minimum": 1},
+          "required": ["pipeline", "title_rules", "extraction_schema"]
+        },
+        "ocr": {
+          "type": "object", "additionalProperties": false, "required": ["engine", "models", "model_digests_pinned"],
+          "properties": {
+            "engine": {"type": "string", "maxLength": 100},
+            "models": {"type": "array", "items": {"type": "string", "maxLength": 200}, "maxItems": 10},
+            "model_digests_pinned": {"type": "boolean"}
+          }
+        },
+        "model": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false, "required": ["id", "execution_class", "data_egress"],
+             "properties": {
+               "id": {"type": "string", "maxLength": 200},
+               "execution_class": {"const": "LOCAL_MODEL"},
+               "data_egress": {"const": "NONE"}
+             }}
+          ]
+        }
+      }
+    },
+    "review": {
+      "type": "object", "additionalProperties": false, "required": ["required", "status"],
+      "properties": {
+        "required": {"const": true},
+        "status": {"enum": ["NOT_REVIEWED", "IN_REVIEW", "REVIEWED"]}
+      }
+    },
+    "notice": {"type": "string", "maxLength": 300}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "FAILED_SAFE"}}},
+     "then": {"properties": {"failure": {"type": "object"},
+                             "classification": {"properties": {"document_type": {"const": "UNKNOWN"}}}}},
+     "else": {"properties": {"failure": {"type": "null"}}}}
+  ],
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$"},
+    "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,80}$"},
+    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "versioned": {
+      "type": "object", "additionalProperties": false, "required": ["id", "version"],
+      "properties": {"id": {"type": "string", "maxLength": 200}, "version": {"type": "string", "maxLength": 100}}
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "block_id", "quote"],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "block_id": {"type": "string", "maxLength": 100},
+        "quote": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "bbox": {
+          "description": "Normalized top-left XYXY coordinates on the page.",
+          "type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}, "minItems": 4, "maxItems": 4
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value_type", "state", "raw_value", "normalized", "normalization_error",
+                   "confidence", "evidence", "extractor", "origin"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "value_type": {"enum": ["string", "date", "money", "identifier", "tax_id", "number"]},
+        "state": {"enum": ["PRESENT", "MISSING", "EXPLICIT_NULL", "INVALID"]},
+        "raw_value": {"type": ["string", "null"], "maxLength": 2000},
+        "normalized": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false, "required": ["value", "normalizer"],
+             "properties": {"value": {}, "normalizer": {"$ref": "#/$defs/versioned"}}}
+          ]
+        },
+        "normalization_error": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/code"}]},
+        "confidence": {"$ref": "#/$defs/confidence"},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}, "maxItems": 20},
+        "extractor": {"$ref": "#/$defs/versioned"},
+        "origin": {"enum": ["MACHINE", "HUMAN"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "MISSING"}}},
+         "then": {"properties": {"raw_value": {"type": "null"}, "normalized": {"type": "null"},
+                                 "normalization_error": {"type": "null"}, "evidence": {"maxItems": 0}}}},
+        {"if": {"properties": {"state": {"enum": ["PRESENT", "EXPLICIT_NULL", "INVALID"]}}},
+         "then": {"properties": {"raw_value": {"type": "string"}, "evidence": {"minItems": 1}}}},
+        {"if": {"properties": {"state": {"not": {"const": "PRESENT"}}}},
+         "then": {"properties": {"normalized": {"type": "null"}}}},
+        {"if": {"required": ["normalized"], "properties": {"normalized": {"type": "object"}}},
+         "then": {"properties": {"normalization_error": {"type": "null"}}}}
+      ]
+    }
+  }
+}

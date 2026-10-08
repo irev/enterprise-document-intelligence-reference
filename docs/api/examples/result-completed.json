@@ -1,0 +1,74 @@
+{
+  "schema": "tlkdoc.result/v1",
+  "result_id": "res_01J9ZK7Q4M3N2P1R0S",
+  "result_version": 2,
+  "document_id": "doc_01J9ZK6A1B2C3D4E5F",
+  "tenant_id": "tenant-synthetic",
+  "application_id": "app-procurement-demo",
+  "processing_run_id": "run_01J9ZK7P9X8W7V6U5T",
+  "correlation_id": "corr-0001",
+  "status": "COMPLETED",
+  "failure": null,
+  "created_at": "2026-10-08T10:15:02Z",
+  "source": {
+    "sha256": "3f1b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+    "media_type": "application/pdf",
+    "byte_length": 118204,
+    "pages_total": 1,
+    "pages_processed": 1,
+    "filename": "synthetic-invoice.pdf",
+    "external_references": {"po_number": "PO-SYN-0042"}
+  },
+  "classification": {
+    "document_type": "INVOICE",
+    "abstained": false,
+    "method": "TITLE_RULE",
+    "taxonomy": {"id": "business-documents", "version": "business-documents-1"},
+    "classifier": {"id": "title-rules/title-rules-id-en", "version": "1"},
+    "confidence": null,
+    "evidence": [{"page": 1, "block_id": "ocr-p1-l1", "quote": "INVOICE", "bbox": [0.08, 0.04, 0.31, 0.07]}]
+  },
+  "fields": [
+    {
+      "name": "document_number", "value_type": "identifier", "state": "PRESENT",
+      "raw_value": "SYN-0001",
+      "normalized": {"value": "SYN-0001", "normalizer": {"id": "identifier.trimmed", "version": "1"}},
+      "normalization_error": null, "confidence": null,
+      "evidence": [{"page": 1, "block_id": "ocr-p1-l2", "quote": "SYN-0001", "bbox": [0.08, 0.09, 0.42, 0.11]}],
+      "extractor": {"id": "llm-grounded/lmstudio-local", "version": "google/gemma-4-e2b"},
+      "origin": "MACHINE"
+    },
+    {
+      "name": "document_date", "value_type": "date", "state": "PRESENT",
+      "raw_value": "15 Juli 2026",
+      "normalized": null, "normalization_error": "INVALID_DATE_FORMAT", "confidence": null,
+      "evidence": [{"page": 1, "block_id": "ocr-p1-l3", "quote": "15 Juli 2026"}],
+      "extractor": {"id": "llm-grounded/lmstudio-local", "version": "google/gemma-4-e2b"},
+      "origin": "MACHINE"
+    },
+    {
+      "name": "total_amount", "value_type": "money", "state": "PRESENT",
+      "raw_value": "Rp 1.250.000,00",
+      "normalized": {"value": {"amount": "1250000.00", "currency": "IDR"}, "normalizer": {"id": "money.id-ID.IDR", "version": "1"}},
+      "normalization_error": null, "confidence": null,
+      "evidence": [{"page": 1, "block_id": "ocr-p1-l18", "quote": "Rp 1.250.000,00", "bbox": [0.61, 0.72, 0.9, 0.74]}],
+      "extractor": {"id": "llm-grounded/lmstudio-local", "version": "google/gemma-4-e2b"},
+      "origin": "MACHINE"
+    },
+    {
+      "name": "tax_id", "value_type": "tax_id", "state": "MISSING",
+      "raw_value": null, "normalized": null, "normalization_error": null, "confidence": null,
+      "evidence": [],
+      "extractor": {"id": "llm-grounded/lmstudio-local", "version": "google/gemma-4-e2b"},
+      "origin": "MACHINE"
+    }
+  ],
+  "provenance": {
+    "processing_profile": {"id": "default", "version": 1},
+    "configuration": {"pipeline": 3, "title_rules": 1, "extraction_schema": 1},
+    "ocr": {"engine": "paddleocr", "models": ["PP-OCRv3_mobile_det", "en_PP-OCRv4_mobile_rec"], "model_digests_pinned": true},
+    "model": {"id": "google/gemma-4-e2b", "execution_class": "LOCAL_MODEL", "data_egress": "NONE"}
+  },
+  "review": {"required": true, "status": "NOT_REVIEWED"},
+  "notice": "Machine result. Not a business approval or authorization."
+}
