@@ -84,6 +84,15 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+One-shot setup for any supported OS (creates `.venv`, installs `requirements-dev.txt`):
+
+```bash
+scripts/bootstrap.sh              # Linux/macOS
+```
+```powershell
+.\scripts\bootstrap.ps1           # Windows PowerShell
+```
+
 With [uv](https://docs.astral.sh/uv/) installed, the CLI can also be run straight from
 the checkout without activating a virtual environment: `uvx --from . edi doctor`
 (also `uvx --with ".[dev]" pytest`, or `uv tool install .` for a global `edi`).

@@ -69,3 +69,19 @@ def test_paddle_geometry_rejects_misaligned_confidence():
     }]
     with pytest.raises(ValueError, match="INCOMPLETE_PADDLE_OCR_CONFIDENCE"):
         paddle_results_to_ocr_result(raw)
+
+
+def test_paddle_geometry_reads_page_size_from_result_object_when_json_drops_arrays():
+    class Image:
+        shape = (1400, 1000, 3)
+
+    class PaddleResult(dict):
+        # PaddleOCR 3.x: `.json` omits ndarrays; the mapping keeps the page image.
+        @property
+        def json(self):
+            return {"res": {"rec_texts": ["Invoice"], "rec_boxes": [[100, 140, 500, 280]], "rec_scores": [.9]}}
+
+    result = paddle_results_to_ocr_result([PaddleResult(doc_preprocessor_res={"output_img": Image()})])
+
+    assert (result.pages[0].width, result.pages[0].height) == (1000, 1400)
+    assert result.pages[0].lines[0].bbox.x0 == pytest.approx(.1)

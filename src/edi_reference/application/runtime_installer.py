@@ -40,10 +40,16 @@ class InstallStepFailed(RuntimeError):
         self.results = results
 
 
+def runtime_venv_dir(runtime_dir: Path) -> Path:
+    # Windows and WSL/Linux may share one checkout; separate directories keep
+    # each host's pyvenv.cfg and binaries from overwriting the other's.
+    return runtime_dir / ("venv-win" if os.name == "nt" else "venv")
+
+
 def runtime_python(runtime_dir: Path) -> Path:
     if os.name == "nt":
-        return runtime_dir / "venv" / "Scripts" / "python.exe"
-    return runtime_dir / "venv" / "bin" / "python"
+        return runtime_venv_dir(runtime_dir) / "Scripts" / "python.exe"
+    return runtime_venv_dir(runtime_dir) / "bin" / "python"
 
 
 def ensure_runtime_venv(runtime_dir: Path, *, base_python: Path) -> Path:
@@ -54,7 +60,7 @@ def ensure_runtime_venv(runtime_dir: Path, *, base_python: Path) -> Path:
         raise RuntimeError("RUNTIME_PYTHON_NOT_AVAILABLE")
     runtime_dir.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(
-        [str(base_python), "-m", "venv", str(runtime_dir / "venv")],
+        [str(base_python), "-m", "venv", str(runtime_venv_dir(runtime_dir))],
         capture_output=True,
         check=False,
         text=True,

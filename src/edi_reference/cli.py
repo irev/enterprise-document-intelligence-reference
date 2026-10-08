@@ -42,6 +42,8 @@ from edi_reference.application.runtime_bootstrap import (
     resolve_runtime,
 )
 from edi_reference.application.runtime_installer import read_install_state, runtime_python
+from edi_reference.panel_cli import add_parsers as add_panel_parsers
+from edi_reference.panel_cli import run as run_panel_command
 from edi_reference.application.runtime_requirements import provider_runtime_requirement
 from edi_reference.application.runtime_management import RuntimeManagementService
 from edi_reference.application.tier_map import load_tier_map, resolve_tier
@@ -315,10 +317,10 @@ def _model_status_rows(model_root: Path, service: RuntimeManagementService) -> l
     return rows
 
 
-def _server_status_rows() -> list[dict[str, object]]:
+def _server_status_rows(runtime_root: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for definition in servers.list_servers():
-        detection = servers.detect_server(definition.server_id)
+        detection = servers.detect_server(definition.server_id, runtime_root=runtime_root)
         rows.append(
             {
                 "server_id": definition.server_id,
@@ -345,7 +347,7 @@ def _status_summary(
         "tier": _tier_id(vram_mib),
         "providers": _runtime_status_rows(runtime_root),
         "models": _model_status_rows(model_root, service),
-        "servers": _server_status_rows(),
+        "servers": _server_status_rows(runtime_root),
     }
 
 
@@ -378,7 +380,7 @@ def _config_payload(
         "vram_mib": vram_mib,
         "tier": _tier_id(vram_mib),
         "runtime_status": _runtime_status_rows(runtime_root),
-        "servers": _server_status_rows(),
+        "servers": _server_status_rows(runtime_root),
     }
 
 
@@ -526,10 +528,10 @@ def _format_log_line(line: str, *, pretty: bool) -> str:
         return line
 
 
-def _serve_list_payload(host: HostInfo) -> dict[str, object]:
+def _serve_list_payload(host: HostInfo, runtime_root: Path) -> dict[str, object]:
     rows: list[dict[str, object]] = []
     for definition in servers.list_servers():
-        detection = servers.detect_server(definition.server_id)
+        detection = servers.detect_server(definition.server_id, runtime_root=runtime_root)
         vector = servers.native_vector_status(definition.server_id, host.os)
         rows.append(
             {
@@ -556,10 +558,12 @@ def _serve_recommend_payload() -> dict[str, object]:
     }
 
 
-def _resolve_serve_via(server_id: str, via: str, host: HostInfo) -> str:
+def _resolve_serve_via(server_id: str, via: str, host: HostInfo, runtime_root: Path) -> str:
     if via in {"native", "docker"}:
         return via
-    if server_id == "lmstudio" and servers.detect_server(server_id).status == "INSTALLED":
+    if server_id == "lmstudio" and servers.detect_server(
+        server_id, runtime_root=runtime_root
+    ).status == "INSTALLED":
         return "native"
     vector = servers.native_vector_status(server_id, host.os)
     if vector.status == servers.NATIVE_AUTOMATED:
@@ -571,6 +575,14 @@ def _resolve_serve_via(server_id: str, via: str, host: HostInfo) -> str:
     raise OperationError("DOCKER_NOT_AVAILABLE")
 
 
+def _gpu_intent(gpu_mode: str, host: HostInfo) -> bool:
+    if gpu_mode == "on":
+        return True
+    if gpu_mode == "off":
+        return False
+    return host.nvidia_smi
+
+
 def _build_serve_plan(
     server_id: str,
     *,
@@ -579,18 +591,27 @@ def _build_serve_plan(
     runtime_root: Path,
     model: str | None,
     model_root: Path,
+    gpu_mode: str = "auto",
+    variant: str = "desktop",
 ) -> servers.ServerPlan:
     try:
         servers.get_server(server_id)
     except ValueError as exc:
         raise OperationError(str(exc)) from exc
-    resolved_via = _resolve_serve_via(server_id, via, host)
+    if gpu_mode not in servers.GPU_MODES:
+        raise OperationError("INVALID_PARAMS")
+    if variant not in servers.DOCKER_VARIANTS:
+        raise OperationError("INVALID_PARAMS")
+    resolved_via = _resolve_serve_via(server_id, via, host, runtime_root)
+    if variant != "desktop" and (server_id != "lmstudio" or resolved_via != "docker"):
+        raise OperationError("INVALID_PARAMS")
+    gpu = _gpu_intent(gpu_mode, host)
     if resolved_via == "native":
         try:
             return servers.build_native_plan(
                 server_id,
                 host_os=host.os,
-                gpu=host.nvidia_smi,
+                gpu=gpu,
                 runtime_root=runtime_root,
             )
         except ValueError as exc:
@@ -598,17 +619,18 @@ def _build_serve_plan(
     daemon = servers.docker_daemon_status()
     gpu_status = (
         servers.docker_gpu_status()
-        if daemon == "READY" and host.nvidia_smi
+        if daemon == "READY" and gpu
         else "NOT_AVAILABLE"
     )
     try:
         return servers.build_docker_plan(
             server_id,
-            gpu=host.nvidia_smi,
+            gpu=gpu,
             model_id=model,
             hf_cache=model_root / "huggingface",
             daemon_status=daemon,
             gpu_status=gpu_status,
+            variant=variant,
         )
     except ValueError as exc:
         raise OperationError(str(exc)) from exc
@@ -622,12 +644,15 @@ def _server_plan_payload(plan: servers.ServerPlan) -> dict[str, object]:
         "steps": [{"name": step.name, "argv": list(step.argv)} for step in plan.steps],
         "requires_gpu": plan.requires_gpu,
         "venv_required": plan.venv_required,
+        "start_hint": servers.get_server(plan.server_id).start_hint,
     }
     if plan.verify_argv is not None:
         payload["verify_argv"] = list(plan.verify_argv)
     if plan.image is not None:
         payload["image"] = plan.image
         payload["community_image"] = plan.community_image
+        if plan.container_name is not None:
+            payload["container_name"] = plan.container_name
     if plan.error_code is not None:
         payload["error_code"] = plan.error_code
     if plan.instructions:
@@ -643,6 +668,8 @@ def _serve_plan_op(
     runtime_root: Path,
     model: str | None,
     model_root: Path,
+    gpu_mode: str = "auto",
+    variant: str = "desktop",
 ) -> dict[str, object]:
     plan = _build_serve_plan(
         server_id,
@@ -651,6 +678,8 @@ def _serve_plan_op(
         runtime_root=runtime_root,
         model=model,
         model_root=model_root,
+        gpu_mode=gpu_mode,
+        variant=variant,
     )
     return _server_plan_payload(plan)
 
@@ -685,6 +714,8 @@ def _serve_execute_op(
     runtime_root: Path,
     model: str | None,
     model_root: Path,
+    gpu_mode: str = "auto",
+    variant: str = "desktop",
 ) -> dict[str, object]:
     plan = _build_serve_plan(
         server_id,
@@ -693,6 +724,8 @@ def _serve_execute_op(
         runtime_root=runtime_root,
         model=model,
         model_root=model_root,
+        gpu_mode=gpu_mode,
+        variant=variant,
     )
     if not plan.automated:
         raise OperationError(plan.error_code or "INSTALL_VECTOR_NOT_AUTOMATED")
@@ -732,11 +765,7 @@ def _plan_install_op(
     if resolved_runtime.status is not CompatibilityStatus.COMPATIBLE:
         raise OperationError(resolved_runtime.reason or "RUNTIME_INCOMPATIBLE")
     runtime_dir = runtime_root / provider / profile
-    planned_python_executable = str(
-        runtime_dir
-        / "venv"
-        / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
-    )
+    planned_python_executable = str(runtime_python(runtime_dir))
     try:
         plan = resolve_install(
             provider,
@@ -928,12 +957,21 @@ def _dispatch_api(operation: str, params: dict[str, object]) -> dict[str, object
             model_root=_optional_path(params, "model_root", ".edi/models"),
         )
     if operation == "serve.list":
-        return _serve_list_payload(inspect_host())
+        return _serve_list_payload(
+            inspect_host(),
+            runtime_root=_optional_path(params, "runtime_root", ".edi/runtimes"),
+        )
     if operation == "serve.recommend":
         return _serve_recommend_payload()
     if operation in {"serve.plan", "serve.execute"}:
         via = _optional_str(params, "via", "auto")
         if via not in {"auto", "native", "docker"}:
+            raise OperationError("INVALID_PARAMS")
+        gpu_mode = _optional_str(params, "gpu", "auto")
+        if gpu_mode not in {"auto", "on", "off"}:
+            raise OperationError("INVALID_PARAMS")
+        variant = _optional_str(params, "variant", "desktop")
+        if variant not in {"desktop", "headless"}:
             raise OperationError("INVALID_PARAMS")
         server_id = _required_str(params, "server_id")
         if operation == "serve.plan":
@@ -944,6 +982,8 @@ def _dispatch_api(operation: str, params: dict[str, object]) -> dict[str, object
                 runtime_root=_optional_path(params, "runtime_root", ".edi/runtimes"),
                 model=_optional_str_or_none(params, "model"),
                 model_root=_optional_path(params, "model_root", ".edi/models"),
+                gpu_mode=gpu_mode,
+                variant=variant,
             )
         _require_confirm(params)
         return _serve_execute_op(
@@ -953,6 +993,8 @@ def _dispatch_api(operation: str, params: dict[str, object]) -> dict[str, object
             runtime_root=_optional_path(params, "runtime_root", ".edi/runtimes"),
             model=_optional_str_or_none(params, "model"),
             model_root=_optional_path(params, "model_root", ".edi/models"),
+            gpu_mode=gpu_mode,
+            variant=variant,
         )
     if operation in {"install.plan", "install.execute"}:
         host = inspect_host()
@@ -1072,6 +1114,7 @@ def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
     serve_commands = serve.add_subparsers(dest="serve_command", required=True)
     serve_list = serve_commands.add_parser("list", help="registry, ports and detection status")
     serve_list.add_argument("--json", action="store_true")
+    serve_list.add_argument("--runtime-root", type=Path, default=default_runtime_root)
     serve_recommend = serve_commands.add_parser(
         "recommend", help="advisory VRAM-tier recommendations (never selects execution paths)"
     )
@@ -1082,6 +1125,18 @@ def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
         )
         sub.add_argument("--server", required=True, choices=tuple(servers.SERVER_DEFINITIONS))
         sub.add_argument("--via", choices=("auto", "native", "docker"), default="auto")
+        sub.add_argument(
+            "--gpu",
+            choices=("auto", "on", "off"),
+            default="auto",
+            help="GPU intent for the vector: auto (host probe, default), on (require GPU, fail-closed), off (CPU vector)",
+        )
+        sub.add_argument(
+            "--variant",
+            choices=("desktop", "headless"),
+            default="desktop",
+            help="lmstudio docker image: desktop (linuxserver GUI, default) or headless (official API image)",
+        )
         sub.add_argument("--model", default=None, help="model id for the vllm server image")
         sub.add_argument("--runtime-root", type=Path, default=default_runtime_root)
         sub.add_argument("--model-root", type=Path, default=default_model_root)
@@ -1130,6 +1185,7 @@ def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
     )
     web.add_argument("--port", type=int, default=cfg.web_port or 4099, help="listen port (default 4099)")
     web.add_argument("--runtime-root", type=Path, default=default_runtime_root)
+    add_panel_parsers(commands, runtime_root=default_runtime_root)
     return parser
 
 
@@ -1138,6 +1194,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser(config).parse_args(argv)
     if args.command == "model":
         args.command = "models"
+
+    if args.command in ("serve-panel", "panel-user"):
+        return run_panel_command(args)
 
     if args.command == "api":
         text = args.request if args.request is not None else sys.stdin.read()
@@ -1292,7 +1351,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "serve":
         if args.serve_command == "list":
-            payload = _serve_list_payload(host)
+            payload = _serve_list_payload(host, args.runtime_root)
             if args.json:
                 _emit(payload)
                 return 0
@@ -1331,6 +1390,8 @@ def main(argv: list[str] | None = None) -> int:
                     runtime_root=args.runtime_root,
                     model=args.model,
                     model_root=args.model_root,
+                    gpu_mode=args.gpu,
+                    variant=args.variant,
                 )
             except OperationError as exc:
                 print(exc.code)
@@ -1348,6 +1409,8 @@ def main(argv: list[str] | None = None) -> int:
                 runtime_root=args.runtime_root,
                 model=args.model,
                 model_root=args.model_root,
+                gpu_mode=args.gpu,
+                variant=args.variant,
             )
         except OperationError as exc:
             print(exc.code)
