@@ -72,7 +72,17 @@ def test_index_serves_html() -> None:
 
     assert status == 200
     assert content_type.startswith("text/html")
-    assert b"EDI Runtime Panel" in data
+    assert b"EDI Runtime Control Panel" in data
+
+
+def test_html_includes_status_and_servers_views() -> None:
+    status, _, data = _call("GET", "/")
+
+    assert status == 200
+    assert b'data-view="servers"' in data
+    assert b'id="view-servers"' in data
+    assert b'id="status"' in data
+    assert b'id="s-registry"' in data
 
 
 def test_host_endpoint_delegates_to_doctor_operation() -> None:
@@ -95,6 +105,138 @@ def test_providers_and_models_endpoints() -> None:
 
         assert status == 200
         assert record[0]["operation"] == operation
+
+
+def test_status_endpoint_passes_runtime_root() -> None:
+    record: list = []
+
+    status, _, data = _call(
+        "GET", "/admin/runtime/status", api=_recording_api(record), runtime_root="/rt"
+    )
+
+    assert status == 200
+    assert record == [{"operation": "status.summary", "params": {"runtime_root": "/rt"}}]
+    assert json.loads(data)["ok"] is True
+
+
+def test_servers_endpoints_delegate_to_serve_operations() -> None:
+    for path, operation in (
+        ("/admin/runtime/servers", "serve.list"),
+        ("/admin/runtime/servers/recommendations", "serve.recommend"),
+    ):
+        record: list = []
+        status, _, _ = _call("GET", path, api=_recording_api(record))
+
+        assert status == 200
+        assert record == [{"operation": operation, "params": {}}]
+
+
+def test_server_plan_passes_identifiers_only() -> None:
+    record: list = []
+
+    status, _, data = _call(
+        "POST",
+        "/admin/runtime/servers/ollama/install-plans",
+        body=json.dumps(
+            {"via": "docker", "model": "synthetic/model", "command": "rm -rf"}
+        ).encode(),
+        api=_recording_api(record),
+        runtime_root="/rt",
+    )
+
+    assert status == 200
+    assert record == [
+        {
+            "operation": "serve.plan",
+            "params": {
+                "server_id": "ollama",
+                "runtime_root": "/rt",
+                "via": "docker",
+                "model": "synthetic/model",
+            },
+        }
+    ]
+    assert json.loads(data)["ok"] is True
+
+
+def test_server_plan_passes_gpu_and_variant() -> None:
+    record: list = []
+
+    status, _, _ = _call(
+        "POST",
+        "/admin/runtime/servers/lmstudio/install-plans",
+        body=json.dumps(
+            {"via": "docker", "gpu": "off", "variant": "headless", "command": "curl x"}
+        ).encode(),
+        api=_recording_api(record),
+        runtime_root="/rt",
+    )
+
+    assert status == 200
+    assert record == [
+        {
+            "operation": "serve.plan",
+            "params": {
+                "server_id": "lmstudio",
+                "runtime_root": "/rt",
+                "via": "docker",
+                "gpu": "off",
+                "variant": "headless",
+            },
+        }
+    ]
+
+
+def test_server_install_passes_gpu_and_variant() -> None:
+    record: list = []
+
+    status, _, _ = _call(
+        "POST",
+        "/admin/runtime/servers/lmstudio/install",
+        body=json.dumps(
+            {"via": "docker", "gpu": "on", "variant": "desktop", "confirm": True}
+        ).encode(),
+        api=_recording_api(record),
+    )
+
+    assert status == 200
+    assert record == [
+        {
+            "operation": "serve.execute",
+            "params": {
+                "server_id": "lmstudio",
+                "runtime_root": ".edi/runtimes",
+                "via": "docker",
+                "gpu": "on",
+                "variant": "desktop",
+                "confirm": True,
+            },
+        }
+    ]
+
+
+def test_server_plan_rejects_invalid_gpu_via_real_api() -> None:
+    status, _, data = _call(
+        "POST",
+        "/admin/runtime/servers/ollama/install-plans",
+        body=json.dumps({"via": "docker", "gpu": "fastest"}).encode(),
+        api=run_api_request,
+    )
+
+    assert status == 400
+    assert json.loads(data)["error"]["code"] == "INVALID_PARAMS"
+
+
+def test_server_plan_rejects_invalid_via_via_real_api() -> None:
+    status, _, data = _call(
+        "POST",
+        "/admin/runtime/servers/ollama/install-plans",
+        body=json.dumps({"via": "shell"}).encode(),
+        api=run_api_request,
+    )
+
+    assert status == 400
+    assert json.loads(data)["error"]["code"] == "INVALID_PARAMS"
 
 
 def test_install_plan_post_passes_identifiers_only() -> None:
@@ -153,6 +295,7 @@ def test_reserved_verify_routes_fail_closed() -> None:
     for path in (
         "/admin/runtime/providers/paddle-ocr/verify",
         "/admin/runtime/models/pp-ocrv6-medium/verify",
+        "/admin/runtime/servers/ollama/verify",
     ):
         status, _, data = _call(
             "POST", path, body=b'{"profile": "cpu"}', api=_recording_api(record)
@@ -164,6 +307,63 @@ def test_reserved_verify_routes_fail_closed() -> None:
 
 
 # --- confirm-gated execution routes ---------------------------------------------
+
+
+def test_server_install_requires_confirm() -> None:
+    record: list = []
+
+    status, payload = _post(
+        "/admin/runtime/servers/ollama/install",
+        {"via": "auto"},
+        api=_recording_api(record),
+    )
+
+    assert status == 400
+    assert payload["error"]["code"] == "CONFIRMATION_REQUIRED"
+    assert record == []
+
+
+def test_server_install_with_confirm_dispatches_identifiers_only() -> None:
+    record: list = []
+
+    status, payload = _post(
+        "/admin/runtime/servers/ollama/install",
+        {"confirm": True, "via": "native", "command": "rm -rf /"},
+        api=_recording_api(record),
+    )
+
+    assert status == 200
+    assert payload["ok"] is True
+    assert record == [
+        {
+            "operation": "serve.execute",
+            "params": {
+                "server_id": "ollama",
+                "runtime_root": ".edi/runtimes",
+                "via": "native",
+                "confirm": True,
+            },
+        }
+    ]
+
+
+def test_server_install_wrong_method_is_405() -> None:
+    status, _, _ = _call("GET", "/admin/runtime/servers/ollama/install")
+
+    assert status == 405
+
+
+def test_status_route_calls_real_api() -> None:
+    status, _, data = _call(
+        "GET", "/admin/runtime/status", api=run_api_request, runtime_root=".edi/runtimes"
+    )
+
+    assert status == 200
+    payload = json.loads(data)
+    assert payload["ok"] is True
+    assert {"host", "vram_mib", "tier", "providers", "models", "servers"} <= set(
+        payload["result"]
+    )
 
 
 def test_install_execute_requires_confirm() -> None:

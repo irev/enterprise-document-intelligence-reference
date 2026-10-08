@@ -1,0 +1,17 @@
+{
+  "profile_id": "title-rules-id-en",
+  "version": "1",
+  "taxonomy_version": "business-documents-1",
+  "heading_blocks": 8,
+  "rules": [
+    {"pattern": "faktur\\s*pajak", "document_type": "TAX_INVOICE"},
+    {"pattern": "pesanan", "document_type": "ORDER_LETTER"},
+    {"pattern": "(permintaan|perintah|instruksi)\\s*pembayaran|\\bspp\\b", "document_type": "PAYMENT_REQUEST"},
+    {"pattern": "berita\\s*acara", "document_type": "ACCEPTANCE_REPORT"},
+    {"pattern": "kw?uitansi|kwitansi", "document_type": "RECEIPT"},
+    {"pattern": "purchase\\s*order", "document_type": "PURCHASE_ORDER"},
+    {"pattern": "kontrak|perjanjian", "document_type": "CONTRACT"},
+    {"pattern": "\\breceipt\\b", "document_type": "RECEIPT"},
+    {"pattern": "\\binvoice\\b|tagihan", "document_type": "INVOICE"}
+  ]
+}

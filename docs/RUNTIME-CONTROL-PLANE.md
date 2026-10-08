@@ -11,27 +11,31 @@ CLI and Web Admin MUST call the same runtime-management application operations. 
 | Inspect host | `edi doctor` | `GET /admin/runtime/host` |
 | List providers | `edi providers list` | `GET /admin/runtime/providers` |
 | List models | `edi models list` | `GET /admin/runtime/models` |
-| Status summary (host, VRAM tier, provider/model/server readiness) | `edi ps` | API `status.summary`; local panel route planned |
+| Status summary (host, VRAM tier, provider/model/server readiness) | `edi ps` | API `status.summary`; local panel `GET /admin/runtime/status` |
 | Effective local configuration | `edi config` (`--wizard` writes `.edi/config.json`) | local console only (no HTTP surface) |
 | Processing log read | `edi log` (`--tail`, `--follow`, `--pretty`) | local console only (no HTTP surface) |
-| Tier map advisory | `edi serve recommend` | API `serve.recommend` (advisory only; never selects execution paths); local panel route planned |
+| Tier map advisory | `edi serve recommend` | API `serve.recommend` (advisory only; never selects execution paths); local panel `GET /admin/runtime/servers/recommendations` |
 | Plan provider install | `edi install --provider ... --profile ... --dry-run` | `POST /admin/runtime/providers/{id}/install-plans` |
 | Execute provider install | `edi install ... --yes` | Local `edi web` panel: `POST /admin/runtime/providers/{id}/install` with `{"profile": "...", "confirm": true}` (confirm-gated, loopback, unauthenticated). Deployed Web Admin: **reserved** until privileged execution boundary is implemented |
 | Verify provider | `edi ...` (planned) | reserved |
 | Pull model | `edi models pull ... --yes` | Local `edi web` panel: `POST /admin/runtime/models/{id}/pull` with `{"profile": "...", "confirm": true}`. Deployed Web Admin: **reserved** |
 | Verify model | `edi models verify` | reserved |
-| List local inference servers | `edi serve list` | API `serve.list`; local panel route planned |
-| Plan local server install | `edi serve plan --server ... [--via auto\|native\|docker]` | API `serve.plan` (read-only, code-owned vector) |
-| Execute local server install | `edi serve install ... --yes` | API `serve.execute` with `{"confirm": true}` (confirm-gated). Deployed Web Admin: **reserved** |
+| List local inference servers | `edi serve list` | API `serve.list` (optional `runtime_root` for detection beyond PATH); local panel `GET /admin/runtime/servers` |
+| Plan local server install | `edi serve plan --server ... [--via auto\|native\|docker] [--gpu auto\|on\|off] [--variant desktop\|headless]` | API `serve.plan` (read-only, code-owned vector, returns `start_hint`); local panel `POST /admin/runtime/servers/{id}/install-plans` |
+| Execute local server install | `edi serve install ... --yes` | API `serve.execute` with `{"confirm": true}` (confirm-gated); local panel `POST /admin/runtime/servers/{id}/install` with `{"confirm": true}`. Deployed Web Admin: **reserved** |
 
 The local `edi web` panel executes only with an explicit `confirm` flag (equivalent of `--yes`) and identifiers only; it is intended for loopback/trusted networks without authentication. The deployed Web Admin keeps the reserved status until authenticated admin identity and audit exist.
 
 Local server install vectors are code-owned typed argument vectors: native package-manager
-argv or a whitelisted Docker image reference (`ollama/ollama`, `vllm/vllm-openai`,
-`linuxserver/lm-studio` — the LM Studio image is a community image and is labelled as
-such). The API never accepts an image name, shell string, or installer URL from the
-client. Tier recommendations (`runtime/tiers.toml`) are advisory output only; provider
-selection keeps flowing `ProcessingProfile → ExecutionPolicy → ExecutionPlan`.
+argv, a trusted stdlib bootstrap argv (Ollama on Linux downloads the vendor user-space
+tarball into `.edi/runtimes/` — no sudo, no shell), or a whitelisted Docker image
+reference (`ollama/ollama`, `vllm/vllm-openai`, `linuxserver/lm-studio` — the LM Studio
+desktop image is a community image and is labelled as such; `lmstudio/llmster-preview`
+is the official headless API image, selectable with `variant: "headless"`). The API
+never accepts an image name, shell string, or installer URL from the client; `gpu`
+(`auto`/`on`/`off`) and `variant` are validated enums, not free text. Tier
+recommendations (`runtime/tiers.toml`) are advisory output only; provider selection
+keeps flowing `ProcessingProfile → ExecutionPolicy → ExecutionPlan`.
 
 ## Security boundary
 
