@@ -56,7 +56,10 @@ class TitleRuleProfile:
 
 
 def load_title_rule_profile(path: Path) -> TitleRuleProfile:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    return title_rule_profile_from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def title_rule_profile_from_dict(raw: object) -> TitleRuleProfile:
     if not isinstance(raw, dict) or not isinstance(raw.get("rules"), list):
         raise ValueError("INVALID_TITLE_RULE_PROFILE")
     try:

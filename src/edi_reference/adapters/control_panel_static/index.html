@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel Kontrol EDI</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<div id="login" class="login hidden">
+  <form id="login-form" class="card login-card" autocomplete="on">
+    <h1>Panel Kontrol EDI</h1>
+    <p class="mute">Masuk untuk mengelola layanan pemrosesan dokumen.</p>
+    <label for="login-user">Nama pengguna</label>
+    <input id="login-user" name="username" autocomplete="username" required>
+    <label for="login-pass">Kata sandi</label>
+    <input id="login-pass" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Masuk</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="brand">Panel Kontrol EDI</div>
+    <nav id="tabs" class="tabs" role="tablist">
+      <button data-tab="overview" role="tab">Ringkasan</button>
+      <button data-tab="documents" role="tab">Dokumen</button>
+      <button data-tab="jobs" role="tab">Job</button>
+      <button data-tab="benchmark" role="tab">Benchmark</button>
+      <button data-tab="config" role="tab">Konfigurasi</button>
+      <button data-tab="admin" role="tab" data-role="ADMIN">Audit &amp; Pengguna</button>
+    </nav>
+    <div class="who"><span id="who"></span><button id="logout" class="ghost">Keluar</button></div>
+  </header>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <main>
+    <section id="tab-overview" class="tab"></section>
+    <section id="tab-documents" class="tab"></section>
+    <section id="tab-jobs" class="tab"></section>
+    <section id="tab-benchmark" class="tab"></section>
+    <section id="tab-config" class="tab"></section>
+    <section id="tab-admin" class="tab"></section>
+  </main>
+</div>
+</body>
+</html>

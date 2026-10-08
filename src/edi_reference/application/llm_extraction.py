@@ -101,7 +101,7 @@ class LlmFieldExtractor:
         value: object,
     ) -> ExtractedField:
         if isinstance(value, str) and 0 < len(value.strip()) <= MAX_VALUE_LENGTH:
-            located = _locate(blocks, value.strip())
+            located = locate_quote(blocks, value.strip())
             if located is not None:
                 page_number, block, quote = located
                 evidence = EvidenceReference(
@@ -140,7 +140,7 @@ def _decode_values(output: bytes) -> dict[str, object]:
     return fields
 
 
-def _locate(blocks: list[tuple[int, TextBlock]], value: str) -> tuple[int, TextBlock, str] | None:
+def locate_quote(blocks: list[tuple[int, TextBlock]], value: str) -> tuple[int, TextBlock, str] | None:
     pattern = re.compile(r"\s+".join(re.escape(token) for token in value.split()))
     for page_number, block in blocks:
         match = pattern.search(block.text)
