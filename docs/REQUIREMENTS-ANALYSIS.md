@@ -33,7 +33,7 @@ authorization (`docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md:123`).
 
 `INSTALLATION.md` is the operator runbook. Its required sequence:
 
-1. Prerequisites and `edi doctor` as a read-only host probe (`INSTALLATION.md:7-34`).
+1. Prerequisites and `tlkdoc doctor` as a read-only host probe (`INSTALLATION.md:7-34`).
 2. Core bootstrap in `.venv`; core must stay independent of ML dependencies
    (`INSTALLATION.md:36-68`).
 3. Optional PostgreSQL adapter install and disposable test database
@@ -42,7 +42,7 @@ authorization (`docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md:123`).
    trusted, code-owned argv — never shell strings or URLs (`INSTALLATION.md:86-104`).
 5. Isolated provider runtime install below `.edi/runtimes/<provider>/<profile>/venv`
    with atomic `install-state.json` (`INSTALLATION.md:106-142`).
-6. Model provisioning via `edi models pull` / `edi models verify`
+6. Model provisioning via `tlkdoc models pull` / `tlkdoc models verify`
    (`INSTALLATION.md:146-205`).
 7. Production ProcessingProfile pinning of model identity (`INSTALLATION.md:207-225`).
 8. Runtime isolation rules; GPU optional, correctness MUST NOT depend on it
@@ -66,7 +66,7 @@ authorization (`docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md:123`).
 
 | ID | Gap | Evidence |
 |---|---|---|
-| G2 | Migration/test commands pointer is wrong: `INSTALLATION.md:84` defers to `docs/LOCAL-DEVELOPMENT.md`, which contains no migration/test commands (they are in `README.md:89-106`). No `edi` migration subcommand exists; schema setup requires `python scripts/apply_migrations.py --dsn ...`. | `scripts/apply_migrations.py:68-74` |
+| G2 | Migration/test commands pointer is wrong: `INSTALLATION.md:84` defers to `docs/LOCAL-DEVELOPMENT.md`, which contains no migration/test commands (they are in `README.md:89-106`). No `tlkdoc` migration subcommand exists; schema setup requires `python scripts/apply_migrations.py --dsn ...`. | `scripts/apply_migrations.py:68-74` |
 | G9 | Offline/air-gap not delivered: model pull records `WARMED` / `UPSTREAM_CACHE` only, which MUST NOT be read as `READY`/`LOCAL_PINNED`/`OFFLINE_VERIFIED`. | `INSTALLATION.md:186-205`; `src/edi_reference/application/paddle_models.py:128` |
 | G10 | Doc/code drift: `INSTALLATION.md:144` and `:552` claim `install-state.json` reports `INSTALLED`; code writes `READY` on success and `FAILED` on failure, and `cli.py:163` gates on `READY`. `INSTALLED` appears nowhere in `src/`. | `src/edi_reference/application/runtime_management.py:136,148` |
 | G11 | Formatting defects in operator docs (historical; repaired with this change set). | `README.md:126`; `docs/MODEL-RUNTIME-INSTALLATION.md:1,19` |
@@ -87,8 +87,8 @@ Required but missing:
 | Fleet status: list installed runtimes and model states with readiness across providers/profiles (only per-model `models verify` exists) | G3 |
 | Uninstall / rollback / upgrade / repair / cache cleanup commands | G4 |
 | Tenant, application, provider-authorization, and profile administration — currently PostgreSQL tables only, requiring raw SQL | G7 |
-| Consistent machine-readable output: only `edi doctor` emits JSON; `providers list` / `models list` are plain text with no `--json` | G8 |
-| A migration command inside `edi` (today a separate script) | G2 |
+| Consistent machine-readable output: only `tlkdoc doctor` emits JSON; `providers list` / `models list` are plain text with no `--json` | G8 |
+| A migration command inside `tlkdoc` (today a separate script) | G2 |
 
 ### 3.2 Developer flows
 
@@ -104,14 +104,14 @@ Required but missing:
 The data plane (submit → ingest → process → review → results → events) exists as library
 code and PostgreSQL schema (`migrations/0002`–`0016`: `inbound_request`, `document`,
 `processing_run`, `processing_result`, `human_review`, `outbox_message`, …) but has **no
-executable anchor**: no `edi` subcommand, no worker runner entry point, no HTTP endpoint.
+executable anchor**: no `tlkdoc` subcommand, no worker runner entry point, no HTTP endpoint.
 A usage manual cannot demonstrate day-to-day document processing yet (G5).
 
 ### 3.4 GPU detection and advisory model recommendation
 
 Requirement (carried from the GPU-tier work in this project):
 
-1. `edi doctor` (or a new `edi recommend` view) detects GPU name, VRAM, and — where
+1. `tlkdoc doctor` (or a new `tlkdoc recommend` view) detects GPU name, VRAM, and — where
    available — compute capability from `nvidia-smi` (`src/edi_reference/cli.py`,
    host capability inspection in `src/edi_reference/adapters/host_capabilities.py`).
 2. A **configuration file** (extension of `src/edi_reference/runtime/providers.toml` or a
@@ -125,7 +125,7 @@ Requirement (carried from the GPU-tier work in this project):
 
 **Shipped**: the sibling tier map exists (`src/edi_reference/runtime/tiers.toml`,
 `application/tier_map.py`, bands `cpu` / `gpu-low` / `gpu-mid` / `gpu-high`) and is
-surfaced by `edi config`, `edi ps`, `edi serve recommend`, and the API operations
+surfaced by `tlkdoc config`, `tlkdoc ps`, `tlkdoc serve recommend`, and the API operations
 `status.summary` / `serve.recommend`. It stays advisory: no code path selects a
 provider from a tier.
 
@@ -144,18 +144,18 @@ Entry point `edi = "edi_reference.cli:main"` (`pyproject.toml:14-15`). Complete 
 
 | Command | Arguments / flags | Output |
 |---|---|---|
-| `edi doctor` | none | JSON host info incl. `nvidia_gpu` |
-| `edi config` | `--wizard`, `--json`, `--config` | config listing / interactive `.edi/config.json` editor |
-| `edi log` | `--path`, `--tail`, `--follow`, `--pretty` | JSONL log lines |
-| `edi ps` | `--json`, `--runtime-root`, `--model-root` | status summary incl. VRAM tier (API `status.summary`) |
-| `edi providers list` | none | `id: profiles` lines |
-| `edi models list` (alias `edi model`) | none | `provider: model` lines |
-| `edi models pull <model_id>` | `--profile` (default `cpu`), `--source {HUGGINGFACE,BOS}`, `--yes`, `--runtime-root`, `--model-root` | model-state |
-| `edi models verify <model_id>` | `--model-root` | verification result |
-| `edi install` | `--provider`, `--profile` (config defaults; required otherwise), `--dry-run`, `--yes`, `--model`, `--model-source`, `--runtime-root`, `--model-root` | plan / install result, optionally `{"install":..., "model":...}` |
-| `edi serve list/recommend/plan/install` | `--server`, `--via {auto,native,docker}`, `--gpu {auto,on,off}`, `--variant {desktop,headless}` (lmstudio docker), `--model`, `--yes`, `--json`, roots | registry / advisory verdicts / typed vector (+ `start_hint`) / install result |
-| `edi process <path>` | `--profile`, `--model`, `--runtime-root`, `--model-root`, `--log`, `--timeout` | JSON page-analysis report + JSONL processing log |
-| `edi api [request]` | JSON request argument or stdin | `{ok, operation, result\|error}` envelope |
+| `tlkdoc doctor` | none | JSON host info incl. `nvidia_gpu` |
+| `tlkdoc config` | `--wizard`, `--json`, `--config` | config listing / interactive `.edi/config.json` editor |
+| `tlkdoc log` | `--path`, `--tail`, `--follow`, `--pretty` | JSONL log lines |
+| `tlkdoc ps` | `--json`, `--runtime-root`, `--model-root` | status summary incl. VRAM tier (API `status.summary`) |
+| `tlkdoc providers list` | none | `id: profiles` lines |
+| `tlkdoc models list` (alias `tlkdoc model`) | none | `provider: model` lines |
+| `tlkdoc models pull <model_id>` | `--profile` (default `cpu`), `--source {HUGGINGFACE,BOS}`, `--yes`, `--runtime-root`, `--model-root` | model-state |
+| `tlkdoc models verify <model_id>` | `--model-root` | verification result |
+| `tlkdoc install` | `--provider`, `--profile` (config defaults; required otherwise), `--dry-run`, `--yes`, `--model`, `--model-source`, `--runtime-root`, `--model-root` | plan / install result, optionally `{"install":..., "model":...}` |
+| `tlkdoc serve list/recommend/plan/install` | `--server`, `--via {auto,native,docker}`, `--gpu {auto,on,off}`, `--variant {desktop,headless}` (lmstudio docker), `--model`, `--yes`, `--json`, roots | registry / advisory verdicts / typed vector (+ `start_hint`) / install result |
+| `tlkdoc process <path>` | `--profile`, `--model`, `--runtime-root`, `--model-root`, `--log`, `--timeout` | JSON page-analysis report + JSONL processing log |
+| `tlkdoc api [request]` | JSON request argument or stdin | `{ok, operation, result\|error}` envelope |
 
 Cross-cutting CLI rules:
 
@@ -167,7 +167,7 @@ Cross-cutting CLI rules:
 - `paddle-ocr` and `qwen3-vl` are installable today; the remaining providers return
   `RUNTIME_REQUIREMENT_NOT_IMPLEMENTED` / `INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER`
   (`application/runtime_requirements.py`).
-- `edi process` runs inference through the runtime interpreter with a trusted
+- `tlkdoc process` runs inference through the runtime interpreter with a trusted
   code-owned script (document bytes are data, never executed); failures are logged as
   `FILE_PROCESSING_FAILED` before exit 2.
 
@@ -175,18 +175,18 @@ Cross-cutting CLI rules:
 
 | Priority | Addition | Serves | Status |
 |---|---|---|---|
-| P1 | Standard JSON-over-stdio API (`edi api`) dispatching to the same operations as the CLI | G8, panel Phase 0 | **shipped** |
-| P1 | Web panel (`edi web`, stdlib `http.server`, read-only Overview + confirm-gated Install page, default `127.0.0.1:4099`) | G1 (partial), panel Phase 1–2 | **shipped** |
-| P1 | `edi process` — single-file processing, per-page analysis + total pages in output and JSONL processing log | G5 (partial), audit | **shipped** |
-| P1 | `edi install --model` + interactive TTY model selection during install | operator UX | **shipped** |
-| P1 | `edi ps` — aggregate `install-state.json` + `model-state.json` + server detection across the installation (API `status.summary`) | G3 | **shipped** (delivers the `edi status` requirement) |
+| P1 | Standard JSON-over-stdio API (`tlkdoc api`) dispatching to the same operations as the CLI | G8, panel Phase 0 | **shipped** |
+| P1 | Web panel (`tlkdoc web`, stdlib `http.server`, read-only Overview + confirm-gated Install page, default `127.0.0.1:4099`) | G1 (partial), panel Phase 1–2 | **shipped** |
+| P1 | `tlkdoc process` — single-file processing, per-page analysis + total pages in output and JSONL processing log | G5 (partial), audit | **shipped** |
+| P1 | `tlkdoc install --model` + interactive TTY model selection during install | operator UX | **shipped** |
+| P1 | `tlkdoc ps` — aggregate `install-state.json` + `model-state.json` + server detection across the installation (API `status.summary`) | G3 | **shipped** (delivers the `tlkdoc status` requirement) |
 | P1 | `--json` on `providers list` / `models list` (stable machine-readable shape) | G8, panel Phase 1 | planned (stdio API covers machine consumers) |
-| P1 | `edi config` — effective configuration view + `--wizard` editor writing `.edi/config.json` (flag > config > default) | operator UX | **shipped** |
-| P1 | `edi log` — processing JSONL viewer (`--tail`, `--follow`, `--pretty`) | G5 (audit UX) | **shipped** |
-| P2 | `edi serve` — local inference server registry/detect/recommend/plan/install (`ollama`, `lmstudio`, `vllm`), native + whitelisted Docker vectors, confirm-gated (API `serve.*`) | operator UX | **shipped** |
+| P1 | `tlkdoc config` — effective configuration view + `--wizard` editor writing `.edi/config.json` (flag > config > default) | operator UX | **shipped** |
+| P1 | `tlkdoc log` — processing JSONL viewer (`--tail`, `--follow`, `--pretty`) | G5 (audit UX) | **shipped** |
+| P2 | `tlkdoc serve` — local inference server registry/detect/recommend/plan/install (`ollama`, `lmstudio`, `vllm`), native + whitelisted Docker vectors, confirm-gated (API `serve.*`) | operator UX | **shipped** |
 | P2 | GPU tier view: detect VRAM → advisory recommendation from config tier map (§3.4) | operator UX | **shipped** (`runtime/tiers.toml`) |
 | P2 | `uvx` / `uv tool` run instructions (source tree only; no PyPI publish) | developer UX | **shipped** (cli-reference) |
-| P2 | `edi migrate` wrapper over `scripts/apply_migrations.py` (same trusted argv) | G2 | planned |
+| P2 | `tlkdoc migrate` wrapper over `scripts/apply_migrations.py` (same trusted argv) | G2 | planned |
 | P3 | Administration commands for tenant/application/authorization/profile scoped to the control-plane tables | G7 | planned |
 | P3 | Lifecycle commands: uninstall, verify-provider (mirror of reserved Web op) | G4, `RUNTIME-CONTROL-PLANE.md` | planned |
 
@@ -195,28 +195,28 @@ Cross-cutting CLI rules:
 CLI and Web Admin MUST call the same runtime-management application operations; the Web
 layer MUST NOT accept shell commands, package-manager arguments, executable paths, or
 installer URLs (`docs/RUNTIME-CONTROL-PLANE.md:5`). This means Phase 1 web work is an
-adapter over the same application services `edi` already uses — not a second
+adapter over the same application services `tlkdoc` already uses — not a second
 implementation.
 
 ## 5. Control panel: WEB (phased)
 
 Before this change set there was no HTTP surface anywhere in `src/` or `deploy/`; a
-stdlib read-only adapter now exists (`adapters/web_panel.py`, served by `edi web`). A
+stdlib read-only adapter now exists (`adapters/web_panel.py`, served by `tlkdoc web`). A
 deployed service (auth, roles, metrics) is still a future milestone (RI-5.5)
 (`docs/RI-0.5-SHARED-SERVICE-ARCHITECTURE.md:136,147`).
 
 ### Phase 0 — CLI parity (prerequisite)
 
-Partially **shipped**: `edi api` provides the standard JSON request/response envelope
-over the same operations, `edi process` provides the page-audit report + JSONL
-processing log, and `edi ps` + the GPU tier view close the two Phase 0 read gaps
+Partially **shipped**: `tlkdoc api` provides the standard JSON request/response envelope
+over the same operations, `tlkdoc process` provides the page-audit report + JSONL
+processing log, and `tlkdoc ps` + the GPU tier view close the two Phase 0 read gaps
 (every Phase 1 web read maps 1:1 to a CLI/API operation, per the shared-operations
 contract). Remaining: nothing inside Phase 0 itself; `status.summary` / `serve.*` still
 need local panel routes.
 
 ### Phase 1 — read-only runtime views — partially shipped
 
-`edi web` (stdlib `http.server`, default bind `127.0.0.1`, port 4099) implements:
+`tlkdoc web` (stdlib `http.server`, default bind `127.0.0.1`, port 4099) implements:
 
 - `GET /admin/runtime/host`, `GET /admin/runtime/providers`,
   `GET /admin/runtime/models`,
@@ -287,11 +287,11 @@ Requirements:
 
 | ID | Gap | Target |
 |---|---|---|
-| G1 | No HTTP/web surface at all | Partially shipped: local `edi web` (Phase 1 reads + confirm-gated Phase 2 install/pull); verify ops, deployed admin, Phase 3 remainder (§5) |
-| G2 | No `edi` migration command; wrong doc pointer | CLI P2; pointer repaired in this change set |
-| G3 | No fleet status command | **shipped** as `edi ps` + API `status.summary` |
+| G1 | No HTTP/web surface at all | Partially shipped: local `tlkdoc web` (Phase 1 reads + confirm-gated Phase 2 install/pull); verify ops, deployed admin, Phase 3 remainder (§5) |
+| G2 | No `tlkdoc` migration command; wrong doc pointer | CLI P2; pointer repaired in this change set |
+| G3 | No fleet status command | **shipped** as `tlkdoc ps` + API `status.summary` |
 | G4 | No uninstall/rollback/upgrade/repair commands | CLI P3 |
-| G5 | Data-plane executable anchor; usage manual | Manual shipped; `edi process` (single-file + page-audit log), `edi api`, and `edi log` shipped; full submit/review pipeline remains a future milestone |
+| G5 | Data-plane executable anchor; usage manual | Manual shipped; `tlkdoc process` (single-file + page-audit log), `tlkdoc api`, and `tlkdoc log` shipped; full submit/review pipeline remains a future milestone |
 | G6 | Only `paddle-ocr` installable despite declared providers | Partially shipped: `paddle-ocr` + `qwen3-vl` installable of 7 declared; remaining providers (incl. catalog-only `paddleocr-vl`) out of scope |
 | G7 | No tenant/application/authorization admin CLI | CLI P3 / Phase 3 |
 | G8 | No auth/roles, logging, metrics; JSON only from `doctor` | Partially shipped: stdio JSON API, JSONL processing log, `ps`/`serve`/`config --json`; auth/roles/metrics remain |
@@ -317,7 +317,7 @@ Requirements:
 
 ## 9. Out of scope
 
-- Remaining CLI additions (`edi migrate`, admin/lifecycle commands) and any web phase;
+- Remaining CLI additions (`tlkdoc migrate`, admin/lifecycle commands) and any web phase;
   this change set shipped only the items marked **shipped** in §4.2 plus the
   documentation repairs.
 - Hardware/air-gap sizing recommendations produced in the separate blueprint review

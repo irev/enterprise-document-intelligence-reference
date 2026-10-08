@@ -1,7 +1,7 @@
 """Hardware VRAM tier map loaded from the code-owned tiers.toml resource.
 
 The tier map is *advisory* documentation for operators and console output
-(`edi ps`, `edi config`, `edi serve recommend`). It never gates execution:
+(`tlkdoc ps`, `tlkdoc config`, `tlkdoc serve recommend`). It never gates execution:
 resolving a tier failing to UNKNOWN preserves UNKNOWN instead of guessing.
 """
 

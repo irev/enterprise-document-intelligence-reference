@@ -53,4 +53,4 @@ Document text is untrusted model input and is labelled as such in the system ins
 
 ## Benchmark
 
-Repeat the measurement on your own samples in the control panel's **Benchmark** tab (`edi serve-panel`, RI-4.11). It runs the same components on labelled documents and compares models on classification accuracy, abstentions, wrong labels, a text-layer check of `PRESENT` values and latency, without writing official document results.
+Repeat the measurement on your own samples in the control panel's **Benchmark** tab (`tlkdoc serve-panel`, RI-4.11). It runs the same components on labelled documents and compares models on classification accuracy, abstentions, wrong labels, a text-layer check of `PRESENT` values and latency, without writing official document results.

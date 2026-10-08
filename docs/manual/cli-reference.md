@@ -1,8 +1,13 @@
 # CLI Reference
 
-Complete reference for the `edi` command-line entry point
+Complete reference for the `tlkdoc` command-line entry point
 (`pyproject.toml` → `edi_reference.cli:main`). Flags and behavior are fixed as of the
 RI-5.13 code base; anything listed as **planned** does not exist yet.
+
+`tlkdoc` is the command name. `edi`, the former name, is installed as an alias with
+identical behavior so existing scripts keep working. Internal names are unchanged: the
+Python package `edi_reference`, the state directory `.edi/`, `EDI_*` environment
+variables and container names.
 
 ## Global conventions
 
@@ -12,43 +17,43 @@ RI-5.13 code base; anything listed as **planned** does not exist yet.
   `RUNTIME_INCOMPATIBLE` or a specific reason code). There is no silent CPU fallback.
 - Roots: `--runtime-root` (default `.edi/runtimes`) and `--model-root` (default
   `.edi/models`) let you point at alternate trees.
-- Stored defaults: `edi config --wizard` writes `.edi/config.json`; every flag then
-  follows **flag > config > built-in default** (`edi install`, `edi models pull`,
-  `edi process`, `edi web`). Invalid config entries are dropped with a warning, never
+- Stored defaults: `tlkdoc config --wizard` writes `.edi/config.json`; every flag then
+  follows **flag > config > built-in default** (`tlkdoc install`, `tlkdoc models pull`,
+  `tlkdoc process`, `tlkdoc web`). Invalid config entries are dropped with a warning, never
   silently trusted.
 - Machine-readable output: `doctor`, `models pull`, `models verify`, `install`,
-  `process`, `config --json`, `ps --json`, `serve * --json` and `edi api` emit JSON;
+  `process`, `config --json`, `ps --json`, `serve * --json` and `tlkdoc api` emit JSON;
   `providers list` and `models list` are plain text.
-  For a uniform request/response contract use [`edi api`](#edi-api-stdin--stdout-json-api).
+  For a uniform request/response contract use [`tlkdoc api`](#edi-api-stdin--stdout-json-api).
 
 ### Running with uv / uvx
 
 No PyPI publish is planned; from a checkout (or any directory containing the project):
 
 ```text
-uvx --from . edi doctor            # run the CLI directly from the source tree
-uv tool install .                  # install `edi` into an isolated uv tool environment
+uvx --from . tlkdoc doctor            # run the CLI directly from the source tree
+uv tool install .                  # install `tlkdoc` into an isolated uv tool environment
 uvx --with ".[dev]" pytest         # run the test suite without a manual venv
 ```
 
-## `edi doctor`
+## `tlkdoc doctor`
 
 Read-only host probe. Prints JSON: OS/Python facts plus `nvidia_gpu` details
 (executable presence, driver version) when detected.
 
 ```text
-edi doctor
+tlkdoc doctor
 ```
 
 Use it before any NVIDIA install. Exit behavior is informational; GPU absence does not
 fail the core.
 
-## `edi providers list`
+## `tlkdoc providers list`
 
 Lists declared providers and their profiles:
 
 ```text
-edi providers list
+tlkdoc providers list
 ```
 
 Output shape: `provider_id: profile1,profile2,...` per line, from
@@ -58,13 +63,13 @@ entries (including `paddleocr-vl`) are catalog-only and report
 `RUNTIME_REQUIREMENT_NOT_IMPLEMENTED` / `INSTALLER_NOT_IMPLEMENTED_FOR_PROVIDER` if you
 attempt installation.
 
-## `edi config`
+## `tlkdoc config`
 
 Shows the effective local configuration — stored file, resolved defaults, host facts,
 VRAM tier, and provider/server install status — or edits it interactively.
 
 ```text
-edi config [--wizard] [--json] [--config PATH]
+tlkdoc config [--wizard] [--json] [--config PATH]
 ```
 
 | Flag | Meaning |
@@ -77,12 +82,12 @@ The file stores *defaults* only: explicit flags always win. Reads are fail-safe 
 missing, unreadable, or invalid file yields built-in defaults with a warning; execution
 commands keep validating their own inputs fail-closed.
 
-## `edi log`
+## `tlkdoc log`
 
-Reads the append-only processing JSONL log written by `edi process`.
+Reads the append-only processing JSONL log written by `tlkdoc process`.
 
 ```text
-edi log [--path PATH] [--tail N] [--follow] [--pretty]
+tlkdoc log [--path PATH] [--tail N] [--follow] [--pretty]
 ```
 
 | Flag | Default | Meaning |
@@ -94,13 +99,13 @@ edi log [--path PATH] [--tail N] [--follow] [--pretty]
 
 Missing file → `LOG_NOT_FOUND` (exit 2). The log is data: never execute its contents.
 
-## `edi ps`
+## `tlkdoc ps`
 
 One-shot status summary across the local installation: host facts, VRAM tier, provider
 runtime states, model provisioning states, and local inference server detection.
 
 ```text
-edi ps [--json] [--runtime-root PATH] [--model-root PATH]
+tlkdoc ps [--json] [--runtime-root PATH] [--model-root PATH]
 ```
 
 Statuses come from the state files only — `READY` / `FAILED` / `NOT_INSTALLED` for
@@ -110,17 +115,17 @@ optimistic `READY`. The tier comes from `runtime/tiers.toml` and is advisory
 (`UNKNOWN` when VRAM is unknown). The same payload is available as API operation
 `status.summary`.
 
-## `edi models list`
+## `tlkdoc models list`
 
 Lists catalog entries as `provider: model_id` per line.
-`edi model ...` is an alias of `edi models ...`.
+`tlkdoc model ...` is an alias of `tlkdoc models ...`.
 
-## `edi models pull <model_id>`
+## `tlkdoc models pull <model_id>`
 
 Warms a model into the governed local cache.
 
 ```text
-edi models pull <model_id> [--profile cpu|nvidia] [--source HUGGINGFACE|BOS] [--yes]
+tlkdoc models pull <model_id> [--profile cpu|nvidia] [--source HUGGINGFACE|BOS] [--yes]
                            [--runtime-root PATH] [--model-root PATH]
 ```
 
@@ -138,24 +143,24 @@ Recorded state: `WARMED`, storage `UPSTREAM_CACHE`. This is **not** an
 `OFFLINE_VERIFIED`/pinned claim; see `INSTALLATION.md` §6. On a TTY a spinner runs on
 stderr while the pull executes; stdout JSON stays byte-identical either way.
 
-## `edi models verify <model_id>`
+## `tlkdoc models verify <model_id>`
 
 Verifies local model provenance/integrity.
 
 ```text
-edi models verify <model_id> [--model-root PATH]
+tlkdoc models verify <model_id> [--model-root PATH]
 ```
 
 Integrity failure surfaces as `MODEL_ARTIFACT_INTEGRITY_MISMATCH` — treat the state as
 invalid and reprovision; never bypass verification.
 
-## `edi install`
+## `tlkdoc install`
 
 Plans or executes an isolated provider runtime install, with optional model
 provisioning in the same run.
 
 ```text
-edi install --provider ID --profile PROFILE [--dry-run] [--yes]
+tlkdoc install --provider ID --profile PROFILE [--dry-run] [--yes]
             [--model MODEL_ID] [--model-source HUGGINGFACE|BOS]
             [--runtime-root PATH] [--model-root PATH]
 ```
@@ -205,19 +210,19 @@ The combined output is one JSON document:
 - with a model: `{"install": {...}, "model": {...}}`
 - without a model: the install result object (unchanged from earlier releases).
 
-## `edi serve` (local inference servers)
+## `tlkdoc serve` (local inference servers)
 
 Detects, recommends, plans, and installs local inference servers — `ollama` (port
 11434), `lmstudio` (port 1234), `vllm` (port 8000). All vectors are code-owned typed
 argument vectors; the commands never accept shell strings or image references.
 
 ```text
-edi serve list [--json] [--runtime-root PATH]
-edi serve recommend [--json]
-edi serve plan --server ID [--via auto|native|docker] [--gpu auto|on|off]
+tlkdoc serve list [--json] [--runtime-root PATH]
+tlkdoc serve recommend [--json]
+tlkdoc serve plan --server ID [--via auto|native|docker] [--gpu auto|on|off]
                [--variant desktop|headless] [--model MODEL_ID]
                [--runtime-root PATH] [--model-root PATH]
-edi serve install --server ID [--via auto|native|docker] [--gpu auto|on|off]
+tlkdoc serve install --server ID [--via auto|native|docker] [--gpu auto|on|off]
                   [--variant desktop|headless] [--model MODEL_ID] [--yes]
                   [--runtime-root PATH] [--model-root PATH]
 ```
@@ -262,13 +267,13 @@ because it is a GPU-only server). `--variant` selects the LM Studio Docker image
 API-only) — and is rejected with `INVALID_PARAMS` for other servers or non-Docker
 vectors.
 
-## `edi process <path>`
+## `tlkdoc process <path>`
 
 Processes one document file through the installed OCR runtime and reports page
 analysis for audit.
 
 ```text
-edi process <path> [--profile cpu|nvidia] [--model MODEL_ID]
+tlkdoc process <path> [--profile cpu|nvidia] [--model MODEL_ID]
             [--runtime-root PATH] [--model-root PATH]
             [--log PATH] [--timeout SECONDS]
 ```
@@ -312,15 +317,15 @@ Behavior:
   (`error_code`) before the command exits 2. Output and log therefore carry the same
   per-file audit information.
 
-## `edi api` (stdin/stdout JSON API)
+## `tlkdoc api` (stdin/stdout JSON API)
 
 Standard input/output API: one JSON request in, one JSON response out. Commands and
 the API execute the **same** operations
 (`docs/RUNTIME-CONTROL-PLANE.md`).
 
 ```text
-echo '{"operation": "doctor"}' | edi api
-edi api '{"operation": "models.list"}'
+echo '{"operation": "doctor"}' | tlkdoc api
+tlkdoc api '{"operation": "models.list"}'
 ```
 
 Request: `{"operation": "<name>", "params": {...}}` — read from the optional
@@ -331,32 +336,32 @@ Response: `{"ok": true, "operation": ..., "result": {...}}` on success (exit 0),
 
 | Operation | Params | Notes |
 |---|---|---|
-| `doctor` | — | Same payload as `edi doctor`. |
+| `doctor` | — | Same payload as `tlkdoc doctor`. |
 | `providers.list` | — | `{"providers": [...]}`. |
 | `models.list` | — | `{"models": [...]}`. |
 | `models.verify` | `model_id`, `model_root?` | |
 | `models.pull` | `model_id`, `profile?`, `source?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Missing confirm → `CONFIRMATION_REQUIRED`. |
-| `status.summary` | `runtime_root?`, `model_root?` | Same payload as `edi ps --json`. |
-| `serve.list` | `runtime_root?` | Same payload as `edi serve list --json`. |
-| `serve.recommend` | — | Same payload as `edi serve recommend --json` (advisory). |
+| `status.summary` | `runtime_root?`, `model_root?` | Same payload as `tlkdoc ps --json`. |
+| `serve.list` | `runtime_root?` | Same payload as `tlkdoc serve list --json`. |
+| `serve.recommend` | — | Same payload as `tlkdoc serve recommend --json` (advisory). |
 | `serve.plan` | `server_id`, `via?` (`auto`\|`native`\|`docker`), `gpu?` (`auto`\|`on`\|`off`), `variant?` (`desktop`\|`headless`), `model?`, `runtime_root?`, `model_root?` | Read-only plan; unknown `via`/`gpu`/`variant` → `INVALID_PARAMS`. |
-| `serve.execute` | `server_id`, `via?`, `gpu?`, `variant?`, `model?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Same gates as `edi serve install`; identifiers only. |
+| `serve.execute` | `server_id`, `via?`, `gpu?`, `variant?`, `model?`, `runtime_root?`, `model_root?`, **`confirm: true`** | Same gates as `tlkdoc serve install`; identifiers only. |
 | `install.plan` | `provider_id`, `profile`, `runtime_root?` | Read-only plan. |
-| `install.execute` | `provider_id`, `profile`, **`confirm: true`**, `model?`, `model_source?`, `runtime_root?`, `model_root?` | Same gates as `edi install`; identifiers only. |
-| `process.file` | `path`, `profile?`, `model?`, `runtime_root?`, `model_root?`, `log?`, `timeout?` | Same report as `edi process`. |
+| `install.execute` | `provider_id`, `profile`, **`confirm: true`**, `model?`, `model_source?`, `runtime_root?`, `model_root?` | Same gates as `tlkdoc install`; identifiers only. |
+| `process.file` | `path`, `profile?`, `model?`, `runtime_root?`, `model_root?`, `log?`, `timeout?` | Same report as `tlkdoc process`. |
 
 Other error codes: `INVALID_REQUEST` (malformed JSON), `UNKNOWN_OPERATION`,
 `INVALID_PARAMS`, plus the operation's own fail-closed codes. The API never accepts
 shell commands, executable paths to run, or installer URLs — only identifiers and
 paths of files the operator already owns.
 
-## `edi web`
+## `tlkdoc web`
 
 Read-only local web panel over the same operations (stdlib `http.server`, no
 framework):
 
 ```text
-edi web [--bind 127.0.0.1] [--port 4099] [--runtime-root PATH]
+tlkdoc web [--bind 127.0.0.1] [--port 4099] [--runtime-root PATH]
 ```
 
 | Flag | Default | Meaning |
@@ -381,14 +386,14 @@ Ctrl+C. Details: [Web control panel](web-panel.md).
 ## Not available yet (planned)
 
 The following appear in `../REQUIREMENTS-ANALYSIS.md` as gaps — do not expect them from
-`edi` today:
+`tlkdoc` today:
 
-- `edi migrate` (schema migrations; use `python scripts/apply_migrations.py --dsn ...`)
+- `tlkdoc migrate` (schema migrations; use `python scripts/apply_migrations.py --dsn ...`)
   — planned.
 - Uninstall / upgrade / rollback, tenant-application-authorization administration —
   planned.
 - Data-plane commands (submit, review, worker run, batch queues) — planned;
-  `edi process` covers single-file OCR processing with audit logging, and the durable
+  `tlkdoc process` covers single-file OCR processing with audit logging, and the durable
   pipeline remains library entry points only.
 
 ## See also

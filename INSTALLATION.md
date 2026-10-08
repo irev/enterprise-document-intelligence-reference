@@ -28,10 +28,10 @@ python -m pip --version
 After the package is installed, use:
 
 ```text
-edi doctor
+tlkdoc doctor
 ```
 
-`edi doctor` reports the host OS/architecture, Docker availability, and detected NVIDIA runtime/driver information. It does not install or modify the host.
+`tlkdoc doctor` reports the host OS/architecture, Docker availability, and detected NVIDIA runtime/driver information. It does not install or modify the host.
 
 ## 2. Install the core
 
@@ -60,9 +60,9 @@ Verify:
 ```text
 python -m pytest
 edi --help
-edi doctor
-edi providers list
-edi models list
+tlkdoc doctor
+tlkdoc providers list
+tlkdoc models list
 ```
 
 The core environment MUST remain independent from provider-specific ML dependencies.
@@ -90,13 +90,13 @@ Always inspect the plan before executing a provider installation.
 CPU:
 
 ```text
-edi install --provider paddle-ocr --profile cpu --dry-run
+tlkdoc install --provider paddle-ocr --profile cpu --dry-run
 ```
 
 NVIDIA:
 
 ```text
-edi install --provider paddle-ocr --profile nvidia --dry-run
+tlkdoc install --provider paddle-ocr --profile nvidia --dry-run
 ```
 
 The dry-run MUST NOT create the provider runtime or install packages.
@@ -120,15 +120,15 @@ Provider runtimes are created below:
 ### CPU
 
 ```text
-edi install --provider paddle-ocr --profile cpu --yes
+tlkdoc install --provider paddle-ocr --profile cpu --yes
 ```
 
 ### NVIDIA
 
-First confirm `edi doctor` detects `nvidia-smi` and a driver version. Then:
+First confirm `tlkdoc doctor` detects `nvidia-smi` and a driver version. Then:
 
 ```text
-edi install --provider paddle-ocr --profile nvidia --yes
+tlkdoc install --provider paddle-ocr --profile nvidia --yes
 ```
 
 The current trusted Paddle recipe installs a pinned PaddlePaddle engine and a constrained PaddleOCR release range with document-parser support. GPU package selection is resolved from the detected NVIDIA driver. A requested NVIDIA profile fails closed when a compatible NVIDIA runtime is not detected; it does not silently fall back to CPU.
@@ -150,7 +150,7 @@ Model provisioning can be part of the same install run: pass `--model <model_id>
 List the governed model catalog:
 
 ```text
-edi models list
+tlkdoc models list
 ```
 
 Current Paddle catalog:
@@ -164,25 +164,25 @@ Current Paddle catalog:
 Warm the default OCR model after the Paddle runtime is installed:
 
 ```text
-edi models pull pp-ocrv6-medium --profile cpu --yes
+tlkdoc models pull pp-ocrv6-medium --profile cpu --yes
 ```
 
 For the NVIDIA runtime:
 
 ```text
-edi models pull pp-ocrv6-medium --profile nvidia --yes
+tlkdoc models pull pp-ocrv6-medium --profile nvidia --yes
 ```
 
 The default upstream source is Hugging Face. The supported alternative is:
 
 ```text
-edi models pull pp-ocrv6-medium --profile cpu --source BOS --yes
+tlkdoc models pull pp-ocrv6-medium --profile cpu --source BOS --yes
 ```
 
 Verify the recorded artifact metadata:
 
 ```text
-edi models verify pp-ocrv6-medium
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 ### Important model-state semantics
@@ -202,7 +202,7 @@ LOCAL_PINNED
 OFFLINE_VERIFIED
 ```
 
-`edi models verify` currently verifies the reference implementation's resolved-model manifest/provenance integrity. It does **not** claim that every upstream weight file has been copied, pinned, or cryptographically verified.
+`tlkdoc models verify` currently verifies the reference implementation's resolved-model manifest/provenance integrity. It does **not** claim that every upstream weight file has been copied, pinned, or cryptographically verified.
 
 Production offline deployment requires a later/local-pinned artifact workflow with explicit model directories and weight integrity metadata. Until that workflow reports a local-pinned state, do not assume the deployment can start without network/cache availability.
 
@@ -256,7 +256,7 @@ The core is cross-platform and CI-tested on Windows, Linux, and macOS. Provider 
 | macOS Apple Silicon | supported | provider-dependent | not applicable | core development; provider acceleration evaluated separately |
 | Docker Linux | supported deployment boundary | supported image/profile | preferred with NVIDIA Container Toolkit when enabled | reproducible production |
 
-Always run `edi doctor` on the actual execution host. Never select an accelerator profile based only on the development machine.
+Always run `tlkdoc doctor` on the actual execution host. Never select an accelerator profile based only on the development machine.
 
 ### 9.1 Windows 11 native
 
@@ -270,16 +270,16 @@ py -3.12 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
 Install the Paddle CPU profile only after inspecting the plan:
 
 ```powershell
-edi install --provider paddle-ocr --profile cpu --dry-run
-edi install --provider paddle-ocr --profile cpu --yes
-edi models pull pp-ocrv6-medium --profile cpu --yes
-edi models verify pp-ocrv6-medium
+tlkdoc install --provider paddle-ocr --profile cpu --dry-run
+tlkdoc install --provider paddle-ocr --profile cpu --yes
+tlkdoc models pull pp-ocrv6-medium --profile cpu --yes
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 Do not assume that native Windows NVIDIA installation is equivalent to Linux CUDA installation. The installer MUST fail closed when it cannot resolve a supported host/runtime combination. Prefer WSL2 or Docker for NVIDIA workloads when native provider compatibility is uncertain.
@@ -304,16 +304,16 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
 For NVIDIA, inspect the resolved plan first:
 
 ```bash
-edi install --provider paddle-ocr --profile nvidia --dry-run
-edi install --provider paddle-ocr --profile nvidia --yes
-edi models pull pp-ocrv6-medium --profile nvidia --yes
-edi models verify pp-ocrv6-medium
+tlkdoc install --provider paddle-ocr --profile nvidia --dry-run
+tlkdoc install --provider paddle-ocr --profile nvidia --yes
+tlkdoc models pull pp-ocrv6-medium --profile nvidia --yes
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 If `nvidia-smi` is unavailable inside WSL2, correct GPU passthrough/driver configuration before attempting the NVIDIA profile. Do not install arbitrary CUDA/Paddle packages into the core `.venv` as a workaround.
@@ -332,24 +332,24 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
 CPU:
 
 ```bash
-edi install --provider paddle-ocr --profile cpu --dry-run
-edi install --provider paddle-ocr --profile cpu --yes
-edi models pull pp-ocrv6-medium --profile cpu --yes
+tlkdoc install --provider paddle-ocr --profile cpu --dry-run
+tlkdoc install --provider paddle-ocr --profile cpu --yes
+tlkdoc models pull pp-ocrv6-medium --profile cpu --yes
 ```
 
 NVIDIA:
 
 ```bash
 nvidia-smi
-edi install --provider paddle-ocr --profile nvidia --dry-run
-edi install --provider paddle-ocr --profile nvidia --yes
-edi models pull pp-ocrv6-medium --profile nvidia --yes
+tlkdoc install --provider paddle-ocr --profile nvidia --dry-run
+tlkdoc install --provider paddle-ocr --profile nvidia --yes
+tlkdoc models pull pp-ocrv6-medium --profile nvidia --yes
 ```
 
 Linux is the preferred production/container GPU target. Host NVIDIA driver installation remains an infrastructure responsibility; the EDI installer provisions the isolated provider runtime, not the host kernel driver.
@@ -366,10 +366,10 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
-Provider installation then uses the same governed `edi install --dry-run` and `edi install --yes` workflow. NVIDIA host-driver/repository configuration MUST follow the enterprise Linux platform policy and the provider's supported compatibility matrix.
+Provider installation then uses the same governed `tlkdoc install --dry-run` and `tlkdoc install --yes` workflow. NVIDIA host-driver/repository configuration MUST follow the enterprise Linux platform policy and the provider's supported compatibility matrix.
 
 ### 9.5 macOS Intel
 
@@ -381,7 +381,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
 macOS Intel is a supported core-development target. Do not select the `nvidia` profile. Paddle/provider installation is conditional on upstream support for the exact macOS/Python combination.
@@ -398,7 +398,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pytest
-edi doctor
+tlkdoc doctor
 ```
 
 The core does not require Rosetta. Do not assume MPS availability for Paddle because another PyTorch-based provider supports MPS. Accelerator capability is provider-specific and must be declared by that provider/runtime profile.
@@ -438,7 +438,7 @@ The host must expose NVIDIA GPU capability to Docker through the supported NVIDI
 
 ```text
 nvidia-smi
-edi doctor
+tlkdoc doctor
 ```
 
 Then use the same governed NVIDIA dry-run/install/model workflow. A container that cannot see the GPU MUST fail the NVIDIA profile rather than silently switching execution class.
@@ -449,10 +449,10 @@ After installation on any supported host:
 
 ```text
 python -m pytest
-edi doctor
-edi providers list
-edi models list
-edi models verify pp-ocrv6-medium
+tlkdoc doctor
+tlkdoc providers list
+tlkdoc models list
+tlkdoc models verify pp-ocrv6-medium
 ```
 
 For a production host, also verify the intended ProcessingProfile, runtime state, model-state semantics, network/offline assumptions, and PostgreSQL connectivity where applicable.
@@ -512,7 +512,7 @@ Do not:
 Run:
 
 ```text
-edi doctor
+tlkdoc doctor
 nvidia-smi
 ```
 
@@ -534,7 +534,7 @@ Do not manually install packages into the core `.venv` as a workaround.
 
 ### `PADDLE_RUNTIME_NOT_INSTALLED`
 
-Install the requested Paddle profile before running `edi models pull`.
+Install the requested Paddle profile before running `tlkdoc models pull`.
 
 ### `MODEL_WARM_FAILED`
 
@@ -549,7 +549,7 @@ The local provenance manifest changed after it was recorded. Treat the state as 
 Before declaring a host ready:
 
 - core tests pass;
-- `edi doctor` matches the intended host;
+- `tlkdoc doctor` matches the intended host;
 - the requested provider profile installs successfully;
 - `install-state.json` reports `READY`;
 - required model operations report the expected governed state;

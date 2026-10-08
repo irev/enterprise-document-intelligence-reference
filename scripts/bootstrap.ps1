@@ -9,7 +9,7 @@
 
 .EXAMPLE
   .\scripts\bootstrap.ps1                     # create/update .venv + install deps
-  .\scripts\bootstrap.ps1 -Check              # also run pytest and edi doctor
+  .\scripts\bootstrap.ps1 -Check              # also run pytest and tlkdoc doctor
   .\scripts\bootstrap.ps1 -Force              # recreate .venv from scratch
   .\scripts\bootstrap.ps1 -Python "C:\Python312\python.exe"
 #>
@@ -25,7 +25,7 @@ Set-Location -LiteralPath (Join-Path $PSScriptRoot "..")
 
 $Venv = ".venv"
 $VenvPython = Join-Path $Venv "Scripts\python.exe"
-$VenvEdi = Join-Path $Venv "Scripts\edi.exe"
+$VenvEdi = Join-Path $Venv "Scripts\tlkdoc.exe"
 
 function Stop-Bootstrap {
     param([string]$Message, [int]$Code = 2)
@@ -122,13 +122,13 @@ if ($Check) {
     Write-Host "bootstrap.ps1: running test suite"
     Invoke-Step "pytest" @($VenvPython, "-m", "pytest", "-q")
     Write-Host "bootstrap.ps1: host probe"
-    Invoke-Step "edi doctor" @($VenvEdi, "doctor")
+    Invoke-Step "tlkdoc doctor" @($VenvEdi, "doctor")
 }
 
 Write-Host @"
 bootstrap.ps1: done.
 Next steps:
-  .\$Venv\Scripts\Activate.ps1      # or call .\$Venv\Scripts\edi.exe directly
-  edi doctor
-  edi config --wizard               # optional one-time defaults
+  .\$Venv\Scripts\Activate.ps1      # or call .\$Venv\Scripts\tlkdoc.exe directly
+  tlkdoc doctor
+  tlkdoc config --wizard               # optional one-time defaults
 "@

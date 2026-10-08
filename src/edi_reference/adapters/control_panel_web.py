@@ -1,4 +1,4 @@
-"""Control-panel HTTP(S) server: `edi serve-panel` (RI-4.11).
+"""Control-panel HTTP(S) server: `tlkdoc serve-panel` (RI-4.11).
 
 Standard library only. Security model:
 - binding beyond loopback requires TLS (certificate and key supplied by the operator);
@@ -142,7 +142,7 @@ def make_handler(panel: Panel):
     origins = {f"{scheme}://{host}" for host in hosts}
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "edi-panel"
+        server_version = "tlkdoc-panel"
         sys_version = ""
 
         def log_message(self, *args) -> None:  # access is audited instead
@@ -560,7 +560,7 @@ def create_server(settings: PanelSettings) -> tuple[PanelHTTPServer, Panel]:
         raise ValueError("TLS_REQUIRED_FOR_NON_LOOPBACK_BIND")
     panel = Panel(settings)
     if not panel.users.all_users():
-        raise ValueError("NO_PANEL_USERS: create an admin with `edi panel-user add <name> --role ADMIN`")
+        raise ValueError("NO_PANEL_USERS: create an admin with `tlkdoc panel-user add <name> --role ADMIN`")
     server = PanelHTTPServer((settings.host, settings.port), make_handler(panel))
     if settings.tls_cert is not None and settings.tls_key is not None:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)

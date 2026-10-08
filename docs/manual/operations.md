@@ -2,23 +2,23 @@
 
 How the system is used after installation. Read the status notes first: the data plane
 (submission → processing → review → results) is currently reachable as **library code
-and PostgreSQL schema only** — there are no `edi` data-plane commands and no service
+and PostgreSQL schema only** — there are no `tlkdoc` data-plane commands and no service
 endpoint yet. See `../REQUIREMENTS-ANALYSIS.md` §3.3 (gap G5).
 
 ## Status overview
 
 | Flow | How you operate it today | Status |
 |---|---|---|
-| Host inspection | `edi doctor` | current |
-| Effective configuration (paths, provider/profile/model defaults) | `edi config` / `edi config --wizard` → `.edi/config.json` | current |
-| Provider install / model provisioning | `edi install` (with `--model` or interactive TTY selection), `edi models pull/verify` | current (`paddle-ocr`, `qwen3-vl` installable) |
-| Fleet status across runtimes | `edi ps` (host, VRAM tier, provider/model/server states; `--json` / API `status.summary`) | current |
-| Local inference servers (ollama / lmstudio / vllm) | `edi serve list/recommend/plan/install` (confirm-gated) | current |
-| Processing log inspection | `edi log [--tail N] [--follow] [--pretty]` | current |
-| Schema migrations | `python scripts/apply_migrations.py --dsn ...` | current (not an `edi` command) |
-| Single-file document processing with page audit | `edi process <file>` → JSON report + JSONL processing log | current |
-| Standard JSON input/output API | `edi api` (stdin/stdout request-response) | current |
-| Web panel (read + confirm-gated install/serve) | `edi web --port 4099 [--bind ...]` (local `http.server`) | current (Overview: doctor/status/catalog, Servers: serve list/recommend/plan/install, Install page, verify ops reserved) |
+| Host inspection | `tlkdoc doctor` | current |
+| Effective configuration (paths, provider/profile/model defaults) | `tlkdoc config` / `tlkdoc config --wizard` → `.edi/config.json` | current |
+| Provider install / model provisioning | `tlkdoc install` (with `--model` or interactive TTY selection), `tlkdoc models pull/verify` | current (`paddle-ocr`, `qwen3-vl` installable) |
+| Fleet status across runtimes | `tlkdoc ps` (host, VRAM tier, provider/model/server states; `--json` / API `status.summary`) | current |
+| Local inference servers (ollama / lmstudio / vllm) | `tlkdoc serve list/recommend/plan/install` (confirm-gated) | current |
+| Processing log inspection | `tlkdoc log [--tail N] [--follow] [--pretty]` | current |
+| Schema migrations | `python scripts/apply_migrations.py --dsn ...` | current (not an `tlkdoc` command) |
+| Single-file document processing with page audit | `tlkdoc process <file>` → JSON report + JSONL processing log | current |
+| Standard JSON input/output API | `tlkdoc api` (stdin/stdout request-response) | current |
+| Web panel (read + confirm-gated install/serve) | `tlkdoc web --port 4099 [--bind ...]` (local `http.server`) | current (Overview: doctor/status/catalog, Servers: serve list/recommend/plan/install, Install page, verify ops reserved) |
 | Full pipeline submit/review | library code + PostgreSQL | **planned** as commands/service |
 | Human review | library code + `human_review` tables | **planned** as commands/panel |
 | Outbound delivery | `outbox_message` state machine (`DELIVERED`/`RETRY_PENDING`/`FAILED`) | **planned** inspection tooling |
@@ -26,20 +26,20 @@ endpoint yet. See `../REQUIREMENTS-ANALYSIS.md` §3.3 (gap G5).
 
 ## 1. Routine operator loop
 
-1. `edi doctor` — confirm the host, driver, and GPU visibility match intent.
-2. `edi config` — confirm the effective paths/defaults; adjust once with
-   `edi config --wizard` instead of re-typing flags.
-3. `edi providers list` / `edi models list` — confirm declared catalog.
-4. After any runtime change: `edi ps` (single view of runtimes, models, servers, and
+1. `tlkdoc doctor` — confirm the host, driver, and GPU visibility match intent.
+2. `tlkdoc config` — confirm the effective paths/defaults; adjust once with
+   `tlkdoc config --wizard` instead of re-typing flags.
+3. `tlkdoc providers list` / `tlkdoc models list` — confirm declared catalog.
+4. After any runtime change: `tlkdoc ps` (single view of runtimes, models, servers, and
    the advisory VRAM tier), or inspect the profile's `install-state.json`
    (status `READY` or `FAILED`).
-5. `edi models verify <model_id>` — after provisioning or before an offline handover.
-6. `edi process <file>` — process a document and keep the JSONL audit trail
+5. `tlkdoc models verify <model_id>` — after provisioning or before an offline handover.
+6. `tlkdoc process <file>` — process a document and keep the JSONL audit trail
    (`.edi/logs/processing.jsonl`): file identity + sha256, per-page line/character
    analysis, and total page count appear in both the JSON output and the log; follow it
-   live with `edi log --follow`.
-7. Optional local inference server: `edi serve recommend` (advisory) → `edi serve plan`
-   (inspect the exact vector) → `edi serve install --yes`.
+   live with `tlkdoc log --follow`.
+7. Optional local inference server: `tlkdoc serve recommend` (advisory) → `tlkdoc serve plan`
+   (inspect the exact vector) → `tlkdoc serve install --yes`.
 8. Run the suite after upgrades: `python -m pytest` through the project virtual
    environment, or `scripts/test-docker.sh` to run it inside Docker (WSL/Linux).
 
@@ -92,7 +92,7 @@ destinations.
 ## 4. What the control panel will add
 
 Read-only runtime visibility first, then privileged operations, then the data-plane
-dashboard: [Web control panel](web-panel.md). Until then, `edi` plus the state files
+dashboard: [Web control panel](web-panel.md). Until then, `tlkdoc` plus the state files
 are the control surface.
 
 ## See also

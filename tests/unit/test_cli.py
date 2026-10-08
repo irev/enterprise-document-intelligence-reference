@@ -65,3 +65,14 @@ def test_cli_dry_run_rejects_windows_nvidia_before_planning(monkeypatch, capsys)
 
     assert result == 2
     assert "PADDLE_NVIDIA_REQUIRES_LINUX_RUNTIME" in capsys.readouterr().out
+
+
+def test_program_name_follows_invoked_alias(monkeypatch):
+    from edi_reference import cli
+
+    monkeypatch.setattr("sys.argv", ["C:/venv/Scripts/tlkdoc.exe"])
+    assert cli._parser().prog == "tlkdoc"
+    monkeypatch.setattr("sys.argv", ["/usr/local/bin/edi"])
+    assert cli._parser().prog == "edi"
+    monkeypatch.setattr("sys.argv", ["-m"])
+    assert cli._parser().prog == "tlkdoc"
