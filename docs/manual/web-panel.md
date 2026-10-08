@@ -12,7 +12,9 @@ edi web --port 4099                    # bind 127.0.0.1 (default), port 4099 (de
 edi web --port 4099 --hostname 0.0.0.0 # expose on all interfaces — no authentication!
 ```
 
-Prints the listening URL, then serves until Ctrl+C. Two pages behind the header nav:
+Prints the listening URL, then serves until Ctrl+C. Three pages behind the header
+nav. Every rendered value comes from a live operation response — the panel contains
+no mock or placeholder data:
 
 **Overview** (read-only by construction):
 
@@ -20,14 +22,24 @@ Prints the listening URL, then serves until Ctrl+C. Two pages behind the header 
 |---|---|---|
 | `GET /` | built-in HTML page (local assets only) | — |
 | `GET /admin/runtime/host` | `doctor` | `edi doctor` |
+| `GET /admin/runtime/status` | `status.summary` (body param `runtime_root`) | `edi ps` |
 | `GET /admin/runtime/providers` | `providers.list` | `edi providers list` |
 | `GET /admin/runtime/models` | `models.list` | `edi models list` |
-| `POST /admin/runtime/providers/{id}/install-plans` | `install.plan` (body: `{"profile": "..."}`) | `edi install ... --dry-run` |
+
+**Servers** (read + plan, plus confirm-gated execution):
+
+| Route | Delegates to | Body |
+|---|---|---|
+| `GET /admin/runtime/servers` | `serve.list` | — |
+| `GET /admin/runtime/servers/recommendations` | `serve.recommend` (advisory) | — |
+| `POST /admin/runtime/servers/{id}/install-plans` | `serve.plan` (read-only) | `{"via": "auto\|native\|docker", "gpu": "auto\|on\|off", "variant": "desktop\|headless", "model": "..."}` |
+| `POST /admin/runtime/servers/{id}/install` | `serve.execute` | `{"via": "...", "gpu": "...", "variant": "...", "model": "...", "confirm": true}` |
 
 **Install** (confirm-gated execution, staged animation plan → install → download):
 
 | Route | Delegates to | Body |
 |---|---|---|
+| `POST /admin/runtime/providers/{id}/install-plans` | `install.plan` (read-only plan preview) | `{"profile": "..."}` |
 | `POST /admin/runtime/providers/{id}/install` | `install.execute` | `{"profile": "...", "confirm": true}` |
 | `POST /admin/runtime/models/{id}/pull` | `models.pull` | `{"profile": "...", "confirm": true}` |
 
@@ -38,10 +50,10 @@ flight — the CLI shows matching spinner animations on stderr during `edi insta
 `edi models pull` (TTY only; stdout JSON stays byte-identical).
 
 Everything else fails closed: verify routes (`providers/{id}/verify`,
-`models/{id}/verify`) answer `403 RESERVED_OPERATION`; unknown paths
-`404 NOT_FOUND`; wrong methods `405`; malformed bodies `400 INVALID_REQUEST` /
-`INVALID_PARAMS`. Every route calls the *same* operation dispatcher as `edi api` —
-one implementation, identifiers only.
+`models/{id}/verify`, `servers/{id}/verify`) answer `403 RESERVED_OPERATION`;
+unknown paths `404 NOT_FOUND`; wrong methods `405`; malformed bodies
+`400 INVALID_REQUEST` / `INVALID_PARAMS`. Every route calls the *same* operation
+dispatcher as `edi api` — one implementation, identifiers only.
 
 ## Security posture
 
@@ -85,14 +97,17 @@ The read routes in the table above are implemented exactly as specified in
   panel with the staged plan → install → download animation. Confirmation is the
   `confirm: true` field (equivalent of `--yes`), identifiers only, server-side typed
   argv.
+- Shipped: `status.summary` on Overview (fleet readiness + VRAM tier) and the
+  **Servers** page — `serve.list` / `serve.recommend` (advisory) read routes plus
+  `serve.plan` and confirm-gated `serve.execute` with the staged plan → install
+  animation. The Servers card offers the GPU intent (`auto` / `on` / `off`) and, for
+  LM Studio over Docker, the image variant (`desktop` GUI / `headless` API) —
+  identifiers only, forwarded verbatim to the API, which validates them.
+  Console equivalents: `edi ps` and `edi serve ...`.
 - Still reserved: verify routes, and all execution on a deployed Web Admin —
   `docs/RUNTIME-CONTROL-PLANE.md` records the boundary. Requirements when the deployed
   boundary is lifted: authenticated admin identity, audit entries in
   `configuration_audit`.
-- API operations exist but are **not routed on the panel yet**: `status.summary` and
-  `serve.list` / `serve.recommend` / `serve.plan` / `serve.execute` (the last one is
-  confirm-gated like `install.execute`). Console equivalents: `edi ps` and
-  `edi serve ...`.
 
 ### Phase 3 — data-plane operations dashboard
 

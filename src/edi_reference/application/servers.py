@@ -15,9 +15,11 @@ and is labelled as such in every plan payload.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -46,9 +48,24 @@ NATIVE_MANUAL = "MANUAL"
 NATIVE_UNSUPPORTED = "UNSUPPORTED"
 NATIVE_ALREADY_INSTALLED = "ALREADY_INSTALLED"
 
+GPU_MODES = frozenset({"auto", "on", "off"})
+DOCKER_VARIANTS = frozenset({"desktop", "headless"})
+
+VLLM_PIP_SPEC = "vllm==0.30.0"
+_BOOTSTRAP_MODULE = "edi_reference.application.server_bootstrap"
+_LMSTUDIO_DESKTOP_IMAGE = "linuxserver/lm-studio:latest"
+_LMSTUDIO_HEADLESS_IMAGE = "lmstudio/llmster-preview:latest"
+_LMSTUDIO_DESKTOP_CONTAINER = "edi-lm-studio"
+_LMSTUDIO_HEADLESS_CONTAINER = "edi-lm-studio-headless"
+_LMSTUDIO_DESKTOP_START_HINTS = (
+    "start the API: docker exec edi-lm-studio lms server start",
+    "verify: curl http://127.0.0.1:1234/v1/models",
+    "web GUI (KasmVNC): http://127.0.0.1:3000",
+)
+
 _OLLAMA_LINUX_INSTRUCTIONS = (
     "official installer: curl -fsSL https://ollama.com/install.sh | sh",
-    "manual: extract the ollama-linux tarball (tar --zstd -xf ollama-linux-*.tgz) under /usr/local",
+    "manual: extract the ollama-linux archive (tar --zstd -xf ollama-linux-*.tar.zst) under /usr/local",
     "start the service: sudo systemctl enable --now ollama",
 )
 _LMSTUDIO_INSTRUCTIONS = (
@@ -88,8 +105,8 @@ SERVER_DEFINITIONS: dict[str, ServerDefinition] = {
         container_name="edi-ollama",
         community_image=False,
         detect_executable="ollama",
-        native_supported_os=frozenset({"windows", "darwin"}),
-        native_manual_os=frozenset({"linux"}),
+        native_supported_os=frozenset({"windows", "darwin", "linux"}),
+        native_manual_os=frozenset(),
         docker_requires_gpu=False,
         manual_error_code="INSTALL_VECTOR_UNSUPPORTED",
         manual_instructions=_OLLAMA_LINUX_INSTRUCTIONS,
@@ -157,6 +174,7 @@ class ServerPlan:
     venv_required: bool = False
     error_code: str | None = None
     instructions: tuple[str, ...] = ()
+    step_timeout_seconds: int = 900
 
 
 def get_server(server_id: str) -> ServerDefinition:
@@ -197,9 +215,51 @@ def _probe_version(executable: str) -> tuple[bool, str | None]:
     return True, first_line or None
 
 
-def detect_server(server_id: str, *, which: WhichFn = shutil.which) -> ServerDetection:
+# Runtime binaries installed by automated native vectors (relative to
+# runtime_root/<server_id>/<via>/) — probed when the executable is not on PATH.
+_RUNTIME_BINARIES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "ollama": ("native", ("bin", "ollama")),
+    "vllm": ("native", ("venv", "bin", "vllm")),
+}
+
+
+def _detect_runtime_state(server_id: str, runtime_root: Path) -> ServerDetection | None:
+    binary = _RUNTIME_BINARIES.get(server_id)
+    if binary is not None:
+        via, parts = binary
+        candidate = runtime_root / server_id / via
+        for part in parts:
+            candidate = candidate / part
+        if candidate.is_file():
+            ok, version = _probe_version(str(candidate))
+            if ok:
+                return ServerDetection(server_id, "INSTALLED", version, str(candidate))
+            return ServerDetection(server_id, "UNKNOWN", None, str(candidate))
+    for via in ("native", "docker"):
+        state_path = runtime_root / server_id / via / "install-state.json"
+        if not state_path.is_file():
+            continue
+        try:
+            raw = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if raw.get("status") == "READY":
+            return ServerDetection(server_id, "INSTALLED", None, None)
+    return None
+
+
+def detect_server(
+    server_id: str,
+    *,
+    which: WhichFn = shutil.which,
+    runtime_root: Path | None = None,
+) -> ServerDetection:
     definition = get_server(server_id)
     path = which(definition.detect_executable)
+    if not path and runtime_root is not None:
+        fallback = _detect_runtime_state(server_id, runtime_root)
+        if fallback is not None:
+            return fallback
     if not path:
         return ServerDetection(server_id, "NOT_INSTALLED", None, None)
     ok, version = _probe_version(str(path))
@@ -247,12 +307,19 @@ def native_vector_status(server_id: str, host_os: str) -> NativeVector:
     )
 
 
+def _lmstudio_identity(variant: str) -> tuple[str, str, bool]:
+    if variant == "headless":
+        return _LMSTUDIO_HEADLESS_IMAGE, _LMSTUDIO_HEADLESS_CONTAINER, False
+    return _LMSTUDIO_DESKTOP_IMAGE, _LMSTUDIO_DESKTOP_CONTAINER, True
+
+
 def _container_steps(
     definition: ServerDefinition,
     *,
     use_gpu: bool,
     model_id: str | None,
     hf_cache: Path,
+    variant: str = "desktop",
 ) -> tuple[InstallStep, ...]:
     argv: list[str] = ["docker", "run", "-d"]
     if use_gpu:
@@ -265,13 +332,17 @@ def _container_steps(
             definition.docker_image,
         ]
     elif definition.server_id == "lmstudio":
+        image, container, _ = _lmstudio_identity(variant)
+        if variant == "headless":
+            argv += ["-p", "1234:1234"]
+        else:
+            argv += ["-p", "3000:3000", "-p", "3001:3001", "-p", "1234:1234"]
         argv += [
             "-e", "PUID=1000",
             "-e", "PGID=1000",
             "-e", "TZ=Etc/UTC",
-            "-p", f"{definition.default_port}:{definition.default_port}",
-            "--name", definition.container_name,
-            definition.docker_image,
+            "--name", container,
+            image,
         ]
     elif definition.server_id == "vllm":
         if model_id is None or not MODEL_ID_PATTERN.fullmatch(model_id):
@@ -304,7 +375,7 @@ def build_native_plan(
         raise ValueError(vector.error_code or "INSTALL_VECTOR_UNSUPPORTED")
 
     if definition.server_id == "lmstudio":
-        detection = detect_server(server_id, which=which)
+        detection = detect_server(server_id, which=which, runtime_root=runtime_root)
         if detection.status == "INSTALLED":
             return ServerPlan(
                 server_id=server_id,
@@ -335,20 +406,41 @@ def build_native_plan(
         )
 
     if definition.server_id == "ollama":
-        install_argv: tuple[str, ...]
         if host_os == "windows":
-            install_argv = (
+            install_argv: tuple[str, ...] = (
                 "winget", "install", "-e", "--id", "Ollama.Ollama", "--silent",
                 "--accept-package-agreements", "--accept-source-agreements",
             )
-        else:
-            install_argv = ("brew", "install", "ollama")
+            return ServerPlan(
+                server_id=server_id,
+                via="native",
+                automated=True,
+                steps=(InstallStep("install-ollama", install_argv),),
+                verify_argv=("ollama", "--version"),
+            )
+        if host_os == "darwin":
+            return ServerPlan(
+                server_id=server_id,
+                via="native",
+                automated=True,
+                steps=(InstallStep("install-ollama", ("brew", "install", "ollama")),),
+                verify_argv=("ollama", "--version"),
+            )
+        destination = runtime_root / "ollama" / "native"
+        bootstrap_argv = (
+            sys.executable,
+            "-m",
+            _BOOTSTRAP_MODULE,
+            "ollama",
+            str(destination),
+        )
         return ServerPlan(
             server_id=server_id,
             via="native",
             automated=True,
-            steps=(InstallStep("install-ollama", install_argv),),
-            verify_argv=("ollama", "--version"),
+            steps=(InstallStep("download-ollama", bootstrap_argv),),
+            verify_argv=(str(destination / "bin" / "ollama"), "--version"),
+            step_timeout_seconds=1800,
         )
 
     if definition.server_id == "vllm":
@@ -362,11 +454,12 @@ def build_native_plan(
             automated=True,
             steps=(
                 InstallStep("upgrade-pip", (executable, "-m", "pip", "install", "--upgrade", "pip")),
-                InstallStep("install-vllm", (executable, "-m", "pip", "install", "vllm")),
+                InstallStep("install-vllm", (executable, "-m", "pip", "install", VLLM_PIP_SPEC)),
             ),
             verify_argv=(executable, "-c", "import vllm; print(vllm.__version__)"),
             requires_gpu=True,
             venv_required=True,
+            step_timeout_seconds=1800,
         )
 
     raise ValueError("UNKNOWN_SERVER")  # pragma: no cover
@@ -380,8 +473,13 @@ def build_docker_plan(
     hf_cache: Path,
     daemon_status: str,
     gpu_status: str,
+    variant: str = "desktop",
 ) -> ServerPlan:
     definition = get_server(server_id)
+    if variant not in DOCKER_VARIANTS:
+        raise ValueError("INVALID_PARAMS")
+    if server_id != "lmstudio" and variant != "desktop":
+        raise ValueError("INVALID_PARAMS")
     if daemon_status != "READY":
         raise ValueError("DOCKER_NOT_AVAILABLE")
     if definition.docker_requires_gpu:
@@ -397,17 +495,27 @@ def build_docker_plan(
         use_gpu=use_gpu,
         model_id=model_id,
         hf_cache=hf_cache,
+        variant=variant,
     )
+    image = definition.docker_image
+    container_name = definition.container_name
+    community_image = definition.community_image
+    instructions: tuple[str, ...] = ()
+    if server_id == "lmstudio":
+        image, container_name, community_image = _lmstudio_identity(variant)
+        if variant == "desktop":
+            instructions = _LMSTUDIO_DESKTOP_START_HINTS
     return ServerPlan(
         server_id=server_id,
         via="docker",
         automated=True,
         steps=steps,
-        verify_argv=("docker", "inspect", "-f", "{{.State.Status}}", definition.container_name),
-        image=definition.docker_image,
-        community_image=definition.community_image,
-        container_name=definition.container_name,
+        verify_argv=("docker", "inspect", "-f", "{{.State.Status}}", container_name),
+        image=image,
+        community_image=community_image,
+        container_name=container_name,
         requires_gpu=definition.docker_requires_gpu,
+        instructions=instructions,
     )
 
 
@@ -440,13 +548,13 @@ def execute_server_plan(
                 raise RuntimeError("RUNTIME_PYTHON_NOT_AVAILABLE")
             runtime_python_path = ensure_runtime_venv(runtime_dir, base_python=base_python)
             python_version = query_python_version(runtime_python_path)
-            steps = execute_steps(plan.steps)
+            steps = execute_steps(plan.steps, timeout_seconds=plan.step_timeout_seconds)
             verification = verify_runtime(plan.verify_argv) if plan.verify_argv else None
         elif plan.via == "docker":
             steps = execute_steps(plan.steps, timeout_seconds=600)
             verification = verify_container(plan.container_name or "", run=run)
         else:
-            steps = execute_steps(plan.steps)
+            steps = execute_steps(plan.steps, timeout_seconds=plan.step_timeout_seconds)
             verification = verify_runtime(plan.verify_argv) if plan.verify_argv else None
     except (InstallStepFailed, RuntimeError) as exc:
         failed = InstallExecutionResult(
