@@ -763,11 +763,7 @@ def _plan_install_op(
     if resolved_runtime.status is not CompatibilityStatus.COMPATIBLE:
         raise OperationError(resolved_runtime.reason or "RUNTIME_INCOMPATIBLE")
     runtime_dir = runtime_root / provider / profile
-    planned_python_executable = str(
-        runtime_dir
-        / "venv"
-        / ("Scripts/python.exe" if platform.system() == "Windows" else "bin/python")
-    )
+    planned_python_executable = str(runtime_python(runtime_dir))
     try:
         plan = resolve_install(
             provider,

@@ -9,6 +9,7 @@ from edi_reference.application.runtime_installer import (
     ensure_runtime_venv,
     execute_steps,
     runtime_python,
+    runtime_venv_dir,
 )
 
 
@@ -16,7 +17,16 @@ def test_runtime_python_is_inside_runtime_directory(tmp_path: Path) -> None:
     python = runtime_python(tmp_path / "paddle-ocr" / "cpu")
 
     assert str(python).startswith(str(tmp_path))
-    assert "venv" in python.parts
+    assert runtime_venv_dir(tmp_path / "paddle-ocr" / "cpu") in python.parents
+
+
+def test_runtime_venv_dir_is_separate_per_host_os(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("os.name", "nt")
+    assert runtime_venv_dir(tmp_path).name == "venv-win"
+    monkeypatch.setattr("os.name", "posix")
+    assert runtime_venv_dir(tmp_path).name == "venv"
 
 
 def test_execute_steps_uses_argv_without_shell(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,7 +62,7 @@ def test_runtime_venv_uses_selected_interpreter(
     expected = runtime_python(runtime_dir)
 
     def run(argv, **kwargs):
-        assert argv == [str(base), "-m", "venv", str(runtime_dir / "venv")]
+        assert argv == [str(base), "-m", "venv", str(runtime_venv_dir(runtime_dir))]
         expected.parent.mkdir(parents=True, exist_ok=True)
         expected.write_text("", encoding="utf-8")
         return Mock(returncode=0, stdout="", stderr="")
