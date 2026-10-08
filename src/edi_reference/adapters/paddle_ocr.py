@@ -65,6 +65,12 @@ def paddle_results_to_ocr_result(results: Any) -> OcrResult:
         boxes = payload.get("rec_boxes")
         scores = payload.get("rec_scores")
         shape = payload.get("doc_preprocessor_res", {}).get("output_img")
+        if shape is None and hasattr(result, "get"):
+            # PaddleOCR 3.x drops image arrays from `.json`; the result object
+            # itself still carries the preprocessed page image.
+            preprocessor = result.get("doc_preprocessor_res")
+            if hasattr(preprocessor, "get"):
+                shape = preprocessor.get("output_img")
         if texts is None or boxes is None or len(texts) != len(boxes):
             raise ValueError("INCOMPLETE_PADDLE_OCR_GEOMETRY")
         if scores is not None and len(scores) != len(texts):
