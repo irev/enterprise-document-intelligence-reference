@@ -17,10 +17,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
+from edi_reference.application.extraction_registry import KNOWN_NORMALIZERS, registry_from_dict
 from edi_reference.application.title_rules import title_rule_profile_from_dict
 from edi_reference.domain.field_schema import ExtractionSchema, FieldDefinition
 
-KINDS = ("title_rules", "extraction_schema", "pipeline")
+KINDS = ("title_rules", "extraction_registry", "extraction_schema", "pipeline")
+__all__ = ["KNOWN_NORMALIZERS"]
 FIELD_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 VALUE_TYPES = {"string", "date", "money", "identifier", "tax_id", "number"}
 MODES = ("rules", "rules_then_llm", "llm")
@@ -65,6 +67,7 @@ def validate_pipeline(raw: object) -> dict:
 VALIDATORS: dict[str, Callable[[object], object]] = {
     "title_rules": title_rule_profile_from_dict,
     "extraction_schema": schema_from_dict,
+    "extraction_registry": registry_from_dict,
     "pipeline": validate_pipeline,
 }
 

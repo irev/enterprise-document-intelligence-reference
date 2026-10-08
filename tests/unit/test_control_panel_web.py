@@ -31,6 +31,7 @@ def panel(tmp_path):
         lms_cli=tmp_path / "missing-lms", llm_port=12340, api_key_env=None,
         default_profile=ROOT / "deploy/classification-profiles/title-rules-id-en.json",
         default_ocr={"det_name": "d", "det_dir": str(tmp_path), "rec_name": "r", "rec_dir": str(tmp_path)},
+        default_registry=ROOT / "deploy/classification-profiles/extraction-registry-business-documents.json",
     )
     server, app = create_server(settings)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -234,3 +235,12 @@ def test_api_port_must_differ_from_panel_port(tmp_path):
                              default_ocr={"det_name": "d", "det_dir": "/d", "rec_name": "r", "rec_dir": "/r"}, api_port=port)
     with pytest.raises(ValueError, match="API_PORT_MUST_DIFFER_FROM_PANEL_PORT"):
         create_server(settings)
+
+
+def test_registry_categories_must_exist_in_the_active_taxonomy(panel):
+    client, _ = panel
+    client.login("admin")
+    current = client.request("GET", "/api/config/extraction_registry")[1]["active"]["content"]
+    bad = dict(current, categories=dict(current["categories"], MADE_UP_REPORT=current["common_schema"] | {"schema_id": "made-up"}))
+    status, body, _ = client.request("POST", "/api/config/extraction_registry", {"content": bad, "comment": "test"})
+    assert status == 400 and body["error"].startswith("CATEGORY_NOT_IN_TAXONOMY:MADE_UP_REPORT")

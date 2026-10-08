@@ -1,0 +1,102 @@
+{
+  "registry_id": "business-documents-fields",
+  "version": "1",
+  "unknown_policy": "COMMON",
+  "missing_category_policy": "COMMON",
+  "normalizers": {
+    "date": ["date.iso-8601@1", "date.textual.id-en@1", "date.numeric.unambiguous@1"],
+    "money": ["money.idr.multi-format@1"],
+    "identifier": ["identifier.trimmed@1"],
+    "tax_id": ["tax_id.npwp@1"]
+  },
+  "fields": {
+    "document_number": {"value_type": "identifier", "label": "Nomor dokumen", "description": "The main number that identifies this document itself, not a referenced order, contract or tax invoice."},
+    "document_date": {"value_type": "date", "label": "Tanggal dokumen", "description": "The issue date of this document, not a due date, period or signature place."},
+    "issuer_name": {"value_type": "string", "label": "Penerbit", "description": "The organization or person that issued this document."},
+    "recipient_name": {"value_type": "string", "label": "Penerima", "description": "The organization or person this document is addressed to."},
+    "subject": {"value_type": "string", "label": "Perihal", "description": "The title or subject line of the document as printed."},
+    "purchase_order_number": {"value_type": "identifier", "label": "Nomor PO", "description": "The purchase order number this document refers to."},
+    "contract_number": {"value_type": "identifier", "label": "Nomor kontrak", "description": "The contract or agreement number this document refers to."},
+    "reference_document_number": {"value_type": "identifier", "label": "Nomor dokumen acuan", "description": "The number of another document this document is based on, when printed as a reference."},
+    "due_date": {"value_type": "date", "label": "Jatuh tempo", "description": "The payment due date, only when printed as such."},
+    "billing_period": {"value_type": "string", "label": "Periode tagihan", "description": "The billing or service period exactly as printed, e.g. a month or a date range."},
+    "subtotal_amount": {"value_type": "money", "label": "Subtotal", "description": "The amount before printed tax or adjustments."},
+    "tax_base_amount": {"value_type": "money", "label": "DPP", "description": "The tax base amount (Dasar Pengenaan Pajak) when printed."},
+    "tax_amount": {"value_type": "money", "label": "Pajak", "description": "The printed tax amount (for example PPN/VAT)."},
+    "total_amount": {"value_type": "money", "label": "Total", "description": "The final total amount to be paid or received for this document."},
+    "currency_code": {"value_type": "string", "label": "Mata uang", "description": "The currency explicitly printed on the document, such as IDR or Rp."},
+    "tax_id": {"value_type": "tax_id", "label": "NPWP", "description": "A taxpayer identification number (NPWP) printed on the document."},
+    "seller_name": {"value_type": "string", "label": "Penjual / PKP", "description": "The seller or taxable entrepreneur (Pengusaha Kena Pajak) on a tax invoice."},
+    "seller_tax_id": {"value_type": "tax_id", "label": "NPWP penjual", "description": "The taxpayer number of the seller on a tax invoice."},
+    "buyer_name": {"value_type": "string", "label": "Pembeli", "description": "The buyer of goods or services on a tax invoice."},
+    "buyer_tax_id": {"value_type": "tax_id", "label": "NPWP pembeli", "description": "The taxpayer number of the buyer on a tax invoice."},
+    "tax_invoice_number": {"value_type": "identifier", "label": "Nomor seri faktur pajak", "description": "The tax invoice code and serial number (Kode dan Nomor Seri Faktur Pajak)."},
+    "payer_name": {"value_type": "string", "label": "Telah terima dari", "description": "The party the payment was received from, on a receipt."},
+    "payment_purpose": {"value_type": "string", "label": "Untuk pembayaran", "description": "What the payment on a receipt is for, as printed."},
+    "amount_in_words": {"value_type": "string", "label": "Terbilang", "description": "The amount written in words, exactly as printed."},
+    "first_party_name": {"value_type": "string", "label": "Pihak pertama", "description": "The party named as the first party (Pihak Pertama)."},
+    "second_party_name": {"value_type": "string", "label": "Pihak kedua", "description": "The party named as the second party (Pihak Kedua)."},
+    "contract_amount": {"value_type": "money", "label": "Nilai kontrak", "description": "The contract value as printed; not a payment or invoice amount."},
+    "work_description": {"value_type": "string", "label": "Uraian pekerjaan", "description": "The work or service the document is about."},
+    "inspection_date": {"value_type": "date", "label": "Tanggal pemeriksaan", "description": "The date the inspection took place."},
+    "inspection_result": {"value_type": "string", "label": "Hasil pemeriksaan", "description": "The inspection outcome exactly as written; never an approval decision."},
+    "payment_stage": {"value_type": "string", "label": "Termin", "description": "The payment stage or term (termin) when mentioned."},
+    "payment_amount": {"value_type": "money", "label": "Nilai pembayaran", "description": "A payment amount printed explicitly; never computed from a percentage."},
+    "payment_period": {"value_type": "string", "label": "Periode pembayaran", "description": "The period a payment relates to, as printed."},
+    "service_description": {"value_type": "string", "label": "Layanan", "description": "The service or utility whose usage is reported."},
+    "service_period_start": {"value_type": "date", "label": "Awal periode", "description": "The first day of the reported service period."},
+    "service_period_end": {"value_type": "date", "label": "Akhir periode", "description": "The last day of the reported service period."},
+    "provider_name": {"value_type": "string", "label": "Penyedia", "description": "The provider of the reported service."},
+    "handover_date": {"value_type": "date", "label": "Tanggal serah terima", "description": "The date of the handover."},
+    "handover_description": {"value_type": "string", "label": "Objek serah terima", "description": "The work or goods handed over."},
+    "handover_result": {"value_type": "string", "label": "Hasil serah terima", "description": "The handover outcome as written; never an approval decision."},
+    "start_date": {"value_type": "date", "label": "Tanggal mulai", "description": "The start date of the contract or order period."},
+    "end_date": {"value_type": "date", "label": "Tanggal selesai", "description": "The end date of the contract or order period."},
+    "requested_amount": {"value_type": "money", "label": "Nilai yang diminta", "description": "The amount requested for payment in a payment request."},
+    "payee_name": {"value_type": "string", "label": "Penerima pembayaran", "description": "The party that should receive the requested payment."},
+    "bank_account_holder": {"value_type": "string", "label": "Nama rekening", "description": "The bank account holder name printed for the payment, never a balance or credential."}
+  },
+  "common_schema": {
+    "schema_id": "common-header", "version": "1",
+    "fields": ["document_number", "document_date", "issuer_name", "recipient_name", "subject", "total_amount", "tax_id"]
+  },
+  "categories": {
+    "INVOICE": {"schema_id": "invoice-header", "version": "1", "fields": [
+      "document_number", "document_date", "issuer_name", "recipient_name", "subject", "purchase_order_number",
+      "contract_number", "due_date", "billing_period", "subtotal_amount", "tax_base_amount", "tax_amount",
+      "total_amount", "tax_id", "currency_code"]},
+    "TAX_INVOICE": {"schema_id": "tax-invoice-header", "version": "1", "fields": [
+      "tax_invoice_number", "document_date", "seller_name", "seller_tax_id", "buyer_name", "buyer_tax_id",
+      "tax_base_amount", "tax_amount", "total_amount"]},
+    "RECEIPT": {"schema_id": "receipt-header", "version": "1", "fields": [
+      "document_number", "document_date", "issuer_name", "payer_name", "payment_purpose", "total_amount",
+      "amount_in_words", "currency_code"]},
+    "PURCHASE_ORDER": {"schema_id": "purchase-order-header", "version": "1", "fields": [
+      "document_number", "document_date", "issuer_name", "recipient_name", "subject", "contract_number",
+      "subtotal_amount", "tax_amount", "total_amount"]},
+    "ORDER_LETTER": {"schema_id": "order-letter-header", "version": "1", "fields": [
+      "document_number", "document_date", "issuer_name", "recipient_name", "subject", "contract_number",
+      "work_description", "start_date", "end_date", "total_amount"]},
+    "CONTRACT": {"schema_id": "contract-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "first_party_name", "second_party_name", "contract_amount",
+      "work_description", "start_date", "end_date"]},
+    "PAYMENT_REQUEST": {"schema_id": "payment-request-header", "version": "1", "fields": [
+      "document_number", "document_date", "issuer_name", "recipient_name", "subject", "reference_document_number",
+      "payee_name", "requested_amount", "bank_account_holder"]},
+    "ACCEPTANCE_REPORT": {"schema_id": "acceptance-report-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "first_party_name", "second_party_name", "contract_number",
+      "work_description", "inspection_result"]},
+    "WORK_INSPECTION_REPORT": {"schema_id": "work-inspection-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "contract_number", "contract_amount", "work_description",
+      "inspection_date", "inspection_result", "first_party_name", "second_party_name", "payment_stage", "payment_amount"]},
+    "HANDOVER_REPORT": {"schema_id": "handover-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "contract_number", "handover_date", "handover_description",
+      "first_party_name", "second_party_name", "handover_result"]},
+    "PAYMENT_REPORT": {"schema_id": "payment-report-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "reference_document_number", "first_party_name",
+      "second_party_name", "payment_amount", "payment_period"]},
+    "SERVICE_USAGE_REPORT": {"schema_id": "service-usage-header", "version": "1", "fields": [
+      "document_number", "document_date", "subject", "service_description", "service_period_start",
+      "service_period_end", "provider_name"]}
+  }
+}

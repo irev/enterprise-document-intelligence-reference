@@ -41,6 +41,7 @@ class LlmFieldExtractor:
         limits: InvocationLimits,
         invoker: ProviderInvoker,
         attempt_id: Callable[[], str] = lambda: str(uuid.uuid4()),
+        descriptions: dict[str, str] | None = None,
     ) -> None:
         if Capability.FIELD_EXTRACTION not in provider.capabilities:
             raise ValueError("PROVIDER_LACKS_FIELD_EXTRACTION")
@@ -53,6 +54,8 @@ class LlmFieldExtractor:
         self._limits = limits
         self._invoker = invoker
         self._attempt_id = attempt_id
+        # Field meanings from the catalog; they tell the model which printed value is meant.
+        self._descriptions = descriptions or {}
 
     def extract(self, document: StructuredDocument, document_type: str) -> tuple[ExtractedField, ...]:
         blocks = [
@@ -71,7 +74,8 @@ class LlmFieldExtractor:
                     "media_type": REQUEST_MEDIA_TYPE,
                     "document_type": document_type,
                     "fields": [
-                        {"name": item.field_name, "value_type": item.value_type}
+                        {"name": item.field_name, "value_type": item.value_type,
+                         "description": self._descriptions.get(item.field_name, "")}
                         for item in self._schema.fields
                     ],
                     "lines": [block.text for _, block in blocks],

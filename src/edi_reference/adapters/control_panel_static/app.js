@@ -258,7 +258,8 @@ async function showResult(host, id, version) {
       el("dt", {}, "Bukti klasifikasi"), el("dd", {}, (r.classification_evidence || []).length ? r.classification_evidence.map((e) => el("div", {}, el("span", { class: "quote" }, e.quote || ""), el("span", { class: "small mute" }, ` hal ${e.page}`))) : "— (abstain)"),
       el("dt", {}, "Konfigurasi"), el("dd", { class: "small" }, Object.entries(r.config || {}).map(([k, v]) => `${k}@v${v}`).join(" · ")),
       el("dt", {}, "OCR"), el("dd", { class: "small" }, `${r.ocr_engine || "—"} · ${r.pages_processed ?? "?"}/${r.total_pages ?? "?"} hal · ${r.lines ?? 0} baris · ${r.ocr_s ?? "?"} s${r.ocr_cached ? " (cache)" : ""}`),
-      el("dt", {}, "Model"), el("dd", { class: "small" }, r.llm_model || "tanpa LLM")),
+      el("dt", {}, "Model"), el("dd", { class: "small" }, r.llm_model || "tanpa LLM"),
+      el("dt", {}, "Schema field"), el("dd", { class: "small" }, r.extraction_schema ? `${r.extraction_schema.id}@${r.extraction_schema.version} (${r.extraction_schema.selection})` : "— (tidak ada ekstraksi)")),
     (r.fields || []).length ? el("div", { class: "scroll" }, el("table", {}, el("thead", {}, el("tr", {}, ["Field", "Status", "Nilai (dari sumber)", "Bukti", "Text layer PDF"].map((h) => el("th", {}, h)))),
       el("tbody", {}, r.fields.map((f) => el("tr", {},
         el("td", {}, f.field_name), el("td", { class: f.state === "PRESENT" ? "ok" : "mute" }, f.state),
@@ -384,7 +385,7 @@ async function renderBenchmark(root) {
 }
 
 // ---------------------------------------------------------------- config
-const KIND_LABEL = { pipeline: "Pipeline (model, mode, OCR)", title_rules: "Profil aturan judul", extraction_schema: "Schema field ekstraksi" };
+const KIND_LABEL = { pipeline: "Pipeline (model, mode, OCR)", title_rules: "Profil aturan judul", extraction_registry: "Katalog field & schema per kategori", extraction_schema: "Schema field global (lama)" };
 async function renderConfig(root) {
   const host = el("div");
   const tabs = el("div", { class: "row" }, Object.entries(KIND_LABEL).map(([k, v]) => el("button", { class: "ghost", onclick: () => show(k) }, v)));

@@ -20,6 +20,7 @@ from edi_reference.domain.evidence import EvidenceKind, EvidenceReference
 MAX_RULES = 200
 MAX_PATTERN_LENGTH = 300
 MAX_HEADING_BLOCKS = 50
+MATCH_POLICIES = ("FIRST_RULE", "EARLIEST_MATCH")
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,9 @@ class TitleRuleProfile:
     taxonomy_version: str
     rules: tuple[TitleRule, ...]
     heading_blocks: int = 8
+    # FIRST_RULE: the first rule (in profile order) that matches anywhere in the heading wins.
+    # EARLIEST_MATCH: the match that starts earliest in the heading wins; ties keep profile order.
+    match_policy: str = "FIRST_RULE"
 
     def __post_init__(self) -> None:
         if not self.profile_id or not self.version or not self.taxonomy_version:
@@ -53,6 +57,8 @@ class TitleRuleProfile:
             raise ValueError("INVALID_TITLE_RULE_COUNT")
         if not 1 <= self.heading_blocks <= MAX_HEADING_BLOCKS:
             raise ValueError("INVALID_HEADING_BLOCKS")
+        if self.match_policy not in MATCH_POLICIES:
+            raise ValueError("INVALID_MATCH_POLICY")
 
 
 def load_title_rule_profile(path: Path) -> TitleRuleProfile:
@@ -68,6 +74,7 @@ def title_rule_profile_from_dict(raw: object) -> TitleRuleProfile:
             version=str(raw["version"]),
             taxonomy_version=str(raw["taxonomy_version"]),
             heading_blocks=int(raw.get("heading_blocks", 8)),
+            match_policy=str(raw.get("match_policy", "FIRST_RULE")),
             rules=tuple(TitleRule(str(item["pattern"]), str(item["document_type"])) for item in raw["rules"]),
         )
     except (KeyError, TypeError):
@@ -82,6 +89,7 @@ class TitleRuleClassifier:
         self.model_version = profile.version
         self.taxonomy_version = profile.taxonomy_version
         self._heading_blocks = profile.heading_blocks
+        self._match_policy = profile.match_policy
         self._rules = tuple(
             (re.compile(rule.pattern, re.IGNORECASE), rule.document_type) for rule in profile.rules
         )
@@ -94,10 +102,10 @@ class TitleRuleClassifier:
         # Headings are often split across OCR lines, so match the joined text and
         # cite every block the match spans.
         joined, spans = _join(heading)
-        for pattern, document_type in self._rules:
-            match = pattern.search(joined)
-            if match is None:
-                continue
+        matches = [(m, document_type) for pattern, document_type in self._rules if (m := pattern.search(joined))]
+        if self._match_policy == "EARLIEST_MATCH":
+            matches.sort(key=lambda item: item[0].start())  # stable: ties keep profile order
+        for match, document_type in matches[:1]:
             evidence = tuple(
                 EvidenceReference(
                     observation_id=document.observation_id,

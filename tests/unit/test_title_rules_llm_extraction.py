@@ -32,11 +32,7 @@ from edi_reference.domain.taxonomy import DocumentTaxonomy
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE = load_title_rule_profile(ROOT / "deploy" / "classification-profiles" / "title-rules-id-en.json")
 TAXONOMY = DocumentTaxonomy(
-    "business-documents",
-    "business-documents-1",
-    frozenset({"TAX_INVOICE", "ORDER_LETTER", "PAYMENT_REQUEST", "ACCEPTANCE_REPORT", "RECEIPT",
-               "PURCHASE_ORDER", "CONTRACT", "INVOICE"}),
-)
+    "business-documents", PROFILE.taxonomy_version, frozenset(rule.document_type for rule in PROFILE.rules))
 POLICY = ClassificationPolicy(accept_threshold=0.9, minimum_margin=0.0)
 BOX = BoundingBox(0.0, 0.0, 1.0, 1.0)
 
@@ -56,7 +52,7 @@ def classify(doc: StructuredDocument):
         (("Faktur Pajak", "Kode dan Nomor Seri"), "TAX_INVOICE"),
         (("SURAT PESANAN", "Kontrak"), "ORDER_LETTER"),
         (("Surat Permintaan Pembayaran",), "PAYMENT_REQUEST"),
-        (("BERITA ACARA SERAH TERIMA",), "ACCEPTANCE_REPORT"),
+        (("BERITA ACARA SERAH TERIMA",), "HANDOVER_REPORT"),  # taxonomy v2: was ACCEPTANCE_REPORT
         (("KWITANSI",), "RECEIPT"),
         (("Purchase Order",), "PURCHASE_ORDER"),
         (("SURAT PERJANJIAN",), "CONTRACT"),
@@ -229,3 +225,22 @@ def test_openai_compatible_invoker_rejects_non_loopback_and_missing_key(monkeypa
     with pytest.raises(ProviderInvocationError) as failure:
         extractor(invoker).extract(DOC, "INVOICE")
     assert failure.value.code is InvocationFailureCode.PROVIDER_FAILED
+
+
+def test_new_descriptive_berita_acara_rules_precede_the_generic_one():
+    assert classify(document("BERITA ACARA PEMERIKSAAN PEKERJAAN")).document_type == "WORK_INSPECTION_REPORT"
+    assert classify(document("Berita Acara Serah Terima")).document_type == "HANDOVER_REPORT"
+    assert classify(document("BERITA ACARA PEMBAYARAN")).document_type == "PAYMENT_REPORT"
+    assert classify(document("Berita Acara Penggunaan Layanan")).document_type == "SERVICE_USAGE_REPORT"
+    assert classify(document("BERITA ACARA RAPAT")).document_type == "ACCEPTANCE_REPORT"
+
+
+def test_earliest_match_policy_resolves_multiple_category_terms():
+    lines = ("INVOICE", "Referensi surat pesanan SYN-1")
+    assert classify(document(*lines)).document_type == "ORDER_LETTER"  # FIRST_RULE default: profile order
+    profile = TitleRuleProfile(PROFILE.profile_id, PROFILE.version, PROFILE.taxonomy_version, PROFILE.rules,
+                               PROFILE.heading_blocks, "EARLIEST_MATCH")
+    result = classify_document(document(*lines), classifier=TitleRuleClassifier(profile), policy=POLICY, taxonomy=TAXONOMY)
+    assert result.document_type == "INVOICE" and [e.block_id for e in result.evidence] == ["b0"]
+    with pytest.raises(ValueError, match="INVALID_MATCH_POLICY"):
+        TitleRuleProfile("p", "1", "t", PROFILE.rules, 8, "RANDOM")

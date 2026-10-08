@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 from edi_reference.adapters.api_v1_web import ApiHTTPServer
 from edi_reference.adapters.api_v1_web import make_handler as make_api_handler
 from edi_reference.adapters.lmstudio_control import LmStudioControl, LmStudioError, gpu_status
-from edi_reference.adapters.normalizers import IdIdrMoneyNormalizer, IsoDateNormalizer, TrimmedIdentifierNormalizer
+from edi_reference.adapters.normalizers import reference_normalizers
 from edi_reference.adapters.openai_compatible import OpenAICompatibleInvoker
 from edi_reference.adapters.runtime_ocr import RuntimeOcrEngine, model_dir_digest
 from edi_reference.adapters.sqlite_api_store import SqliteApiStore
@@ -69,6 +69,7 @@ class PanelSettings:
     tls_key: Path | None = None
     allowed_hosts: tuple[str, ...] = ()
     api_port: int | None = None
+    default_registry: Path | None = None
 
 
 class HttpError(Exception):
@@ -102,7 +103,7 @@ class Panel:
         self.api_store = SqliteApiStore(state / "api.sqlite3")
         self.api = ApiService(
             store=self.api_store, panel=self.service,
-            registry=NormalizationRegistry((IdIdrMoneyNormalizer(), IsoDateNormalizer(), TrimmedIdentifierNormalizer())),
+            registry=NormalizationRegistry(reference_normalizers()),
             normalizers={"money": ("money.id-ID.IDR", "1"), "date": ("date.iso-8601", "1"),
                          "identifier": ("identifier.trimmed", "1")},
             on_event=lambda actor, action, **kw: self.audit.record(actor, action, **kw),
@@ -122,6 +123,8 @@ class Panel:
                                       "llm": {"host": "127.0.0.1", "port": self.settings.llm_port,
                                               "model": "google/gemma-4-e2b"},
                                       "ocr": self.settings.default_ocr})
+        if self.settings.default_registry is not None and self.settings.default_registry.is_file():
+            self.config.seed("extraction_registry", json.loads(self.settings.default_registry.read_text(encoding="utf-8")))
 
     def taxonomy_types(self) -> list[str]:
         rules = self.config.active("title_rules")["rules"]
@@ -478,6 +481,11 @@ def make_handler(panel: Panel):
                     content.setdefault("ocr", {}).pop(f"{prefix}_digest", None)
                     if content["ocr"].get(f"{prefix}_dir") == current.get(f"{prefix}_dir") and current.get(f"{prefix}_digest"):
                         content["ocr"][f"{prefix}_digest"] = current[f"{prefix}_digest"]
+            if kind == "extraction_registry":
+                # A category schema for a type the active taxonomy cannot predict is a mistake.
+                unknown = sorted(set(content.get("categories", {})) - set(panel.taxonomy_types()))
+                if unknown:
+                    raise HttpError(400, "CATEGORY_NOT_IN_TAXONOMY:" + ",".join(unknown)[:200])
             version = panel.config.save(kind, content, author=session.username, comment=str(body.get("comment", "")))
             self._audit(session, "config.save", target=f"{kind}@{version}")
             self._send_json({"version": version}, 201)

@@ -84,9 +84,12 @@ class OpenAICompatibleInvoker:
 
     def _extract(self, task: dict, limits: InvocationLimits) -> dict:
         names = [item["name"] for item in task["fields"]]
+        listing = "\n".join(
+            f"- {item['name']} ({item.get('value_type', 'string')})" + (f": {item['description']}" if item.get("description") else "")
+            for item in task["fields"])
         values = self._complete(
             SYSTEM_INSTRUCTION,
-            "Document type: " + str(task["document_type"]) + "\nFields: " + ", ".join(names)
+            "Document type: " + str(task["document_type"]) + "\nFields (name, type and meaning):\n" + listing
             + "\n\nOCR TEXT (one line per text block):\n" + "\n".join(task["lines"]),
             {"name": "fields", "strict": True, "schema": {
                 "type": "object", "additionalProperties": False, "required": names,
