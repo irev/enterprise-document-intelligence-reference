@@ -32,6 +32,9 @@ def add_parsers(commands, *, runtime_root: Path) -> None:
     serve.add_argument("--ocr-rec-dir", type=Path, default=LEGACY_MODELS / "en_PP-OCRv4_rec_infer")
     serve.add_argument("--title-rules", type=Path, default=Path("deploy/classification-profiles/title-rules-id-en.json"),
                        help="seed profile used only when no title-rule configuration exists yet")
+    serve.add_argument("--extraction-registry", type=Path,
+                       default=Path("deploy/classification-profiles/extraction-registry-business-documents.json"),
+                       help="seed field catalog and per-category schemas, used only when none is configured yet")
     serve.add_argument("--lms", type=Path, default=Path.home() / ".lmstudio" / "bin" / ("lms.exe" if os.name == "nt" else "lms"))
     serve.add_argument("--llm-port", type=int, default=12340)
     serve.add_argument("--api-key-env", default="LM_STUDIO_API_KEY",
@@ -95,7 +98,7 @@ def run(args: argparse.Namespace) -> int:
         default_ocr={"det_name": args.ocr_det_name, "det_dir": str(args.ocr_det_dir.resolve()),
                      "rec_name": args.ocr_rec_name, "rec_dir": str(args.ocr_rec_dir.resolve())},
         tls_cert=args.tls_cert, tls_key=args.tls_key, allowed_hosts=tuple(args.allowed_host),
-        api_port=args.api_port,
+        api_port=args.api_port, default_registry=args.extraction_registry,
     )
     try:
         server, panel = create_server(settings)

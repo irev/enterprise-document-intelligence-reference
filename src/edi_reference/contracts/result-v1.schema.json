@@ -99,6 +99,18 @@
                "data_egress": {"const": "NONE"}
              }}
           ]
+        },
+        "extraction_schema": {
+          "description": "The extraction schema actually used for the predicted document type; null when no fields were extracted.",
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false, "required": ["id", "version", "selection"],
+             "properties": {
+               "id": {"type": "string", "maxLength": 100},
+               "version": {"type": "string", "maxLength": 20},
+               "selection": {"enum": ["CATEGORY", "COMMON", "LEGACY_GLOBAL"]}
+             }}
+          ]
         }
       }
     },

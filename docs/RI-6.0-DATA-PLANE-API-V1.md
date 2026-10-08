@@ -1,6 +1,6 @@
 # RI-6.0 — Data-Plane API v1 (design)
 
-Status: **phase A implemented** (see §12). Phases B–E remain design. Machine-readable artifacts:
+Status: **phases A and D implemented** (see §12, §13). Phases B, C and E remain design. Machine-readable artifacts:
 
 - [`src/edi_reference/contracts/openapi-v1.json`](../src/edi_reference/contracts/openapi-v1.json): HTTP contract (OpenAPI 3.1), served at `/v1/openapi.json`.
 - [`src/edi_reference/contracts/result-v1.schema.json`](../src/edi_reference/contracts/result-v1.schema.json): result document (JSON Schema 2020-12), served at `/v1/result-v1.schema.json`.
@@ -222,3 +222,50 @@ Verification at the time of writing:
 
 - 20 HTTP-level unit tests cover keys, scopes, ownership, idempotency, limits, immutability, crash retry and fail-safe results; every produced result is validated against `result-v1.schema.json`. The panel and CLI application-management tests are separate.
 - A Windows 11 HTTPS smoke run on real local documents submitted four documents as a consumer application. Idempotent replays returned the same id. Processing took 24–45 s for four documents. Classification was `TAX_INVOICE`, `INVOICE`, `UNKNOWN` and `RECEIPT`, and all four results were schema-valid.
+
+## 13. Phase D — per-category schemas and normalizers
+
+### Field catalog and category schemas
+
+A new versioned configuration kind, `extraction_registry` (seed: `deploy/classification-profiles/extraction-registry-business-documents.json`), holds one package:
+
+- **Field catalog.** Each field has a stable English id, a value type, a display label and a meaning. The meaning is required and is sent to the model with the field, so that, for example, `contract_amount` is not confused with `total_amount`.
+- **Category schemas.** These reference catalog fields per document type: for example `invoice-header`, `tax-invoice-header`, `work-inspection-header`.
+- **A common schema and two explicit policies:** `unknown_policy` for `UNKNOWN` and `missing_category_policy` for types without a schema. Each is `COMMON` (use the common schema) or `NONE` (extract nothing and do not call the model). No other category's schema is ever used.
+- **Normalizer chains per value type.** These are tried in order; the first normalizer that accepts the value wins and is named in the result.
+
+The package is activated as a whole (validated references, types, known normalizers, unique schema ids). The panel also rejects a registry with categories the active title-rule taxonomy cannot predict (`CATEGORY_NOT_IN_TAXONOMY`). The schema actually used is recorded as `provenance.extraction_schema` (`id`, `version`, `selection` = `CATEGORY`, `COMMON` or `LEGACY_GLOBAL`). This is an additive, optional property of `tlkdoc.result/v1`. `/v1/schemas/{document_type}` returns the category schema. Installations without a registry keep using the global `extraction_schema`, reported as `LEGACY_GLOBAL`.
+
+### Title rules (seed profile v2, taxonomy `business-documents-2`)
+
+- **New rules.** `WORK_INSPECTION_REPORT`, `HANDOVER_REPORT`, `PAYMENT_REPORT` and `SERVICE_USAGE_REPORT` are matched on descriptive headings only (no abbreviations), before the generic `berita acara` → `ACCEPTANCE_REPORT`.
+- **Consumer-visible change.** "Berita Acara Serah Terima" is now `HANDOVER_REPORT` instead of `ACCEPTANCE_REPORT`. This is why the taxonomy version changed. Existing installations keep their active configuration until an administrator activates the new one.
+- **`match_policy`.** `FIRST_RULE` (default, previous behaviour) or `EARLIEST_MATCH`: the heading match that starts first wins, and ties keep profile order. This resolves pages that mention several category terms, for example an invoice that references an order letter.
+
+### Normalizers (RI-3.11: each format is a separately identified, versioned normalizer)
+
+| Normalizer | Accepts | Rejects |
+|---|---|---|
+| `date.textual.id-en@1` | `15 Juli 2026`, `15Juli 2026`, `20 Sep 2026`, `September 20, 2026` | weekday prefixes, unknown month names, impossible dates |
+| `date.numeric.unambiguous@1` | `25/07/2026` (day > 12), `07/25/2026`, equal day and month | `05/07/2026` → `AMBIGUOUS_DATE_FORMAT` |
+| `date.numeric.day-first@1` | `05/07/2026` as 5 July, an explicit locale choice for Indonesian documents | impossible dates |
+| `money.idr.multi-format@1` | `1.250.000,00`, `1,250,000.00`, `Rp 1.250.000,-`, `-Rp349,000.00` | inconsistent grouping (`645.181.835.00`), other currencies (`$`, `USD`, …) → `UNSUPPORTED_CURRENCY` |
+| `tax_id.npwp@1` | NPWP with 15 digits (`99.999.999.9-999.999`) or 16 digits | other lengths or characters; no check digit is computed |
+
+The seed chains are: date = ISO → textual → numeric-unambiguous; money = multi-format IDR; tax_id = NPWP. When every step fails, an ambiguity code is reported in preference to a plain format error, because it tells the operator a locale decision is needed.
+
+### Verification
+
+- 47 normalizer tests, 15 registry and pipeline tests, a panel cross-check test and title-rule policy tests; every produced result is validated against the JSON Schema.
+- 30 local documents were processed through API v1 on Windows 11 with a fresh state (seed registry and rules v2):
+  - All 30 completed with schema-valid results, and every one used the expected category schema (`UNKNOWN` → `common-header`).
+  - All identifiers and tax ids that were found were normalized.
+  - After the two fixes found in this run (dates glued by OCR, the `,-` suffix), 23/28 dates and 23/32 amounts were normalized. The rest were 3 ambiguous numeric dates, 2 timestamps, 8 USD amounts and 1 inconsistent grouping, all correctly not normalized.
+  - The application's 60 requests/minute limit was hit by the polling client and enforced with `Retry-After`.
+
+### Not in phase D
+
+- Repeated table rows (line items).
+- Splitting multi-document packages.
+- Form-based registry editing; the panel edits the registry as versioned JSON.
+- The RoP workspace still uses its own categories and fields; it does not read this registry yet.

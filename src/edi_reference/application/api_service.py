@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Callable, Protocol
 
+from edi_reference.application.extraction_registry import registry_from_dict
 from edi_reference.application.normalization import NormalizationRegistry
-from edi_reference.application.panel_service import PanelService, detect_media_type
+from edi_reference.application.panel_service import PanelService, config_versions, detect_media_type
 from edi_reference.domain.classification import UNKNOWN_DOCUMENT_TYPE
 from edi_reference.domain.normalization import NormalizationError
 
@@ -263,8 +264,8 @@ class ApiService:
                        "filename": document["filename"], "external_references": document["external_references"]},
             "provenance": {
                 "processing_profile": {"id": document["profile"], "version": 1},
-                "configuration": {"pipeline": snap["pipeline_version"], "title_rules": snap["title_rules"]["version"],
-                                  "extraction_schema": snap["schema"]["version"]},
+                "configuration": config_versions(snap),
+                "extraction_schema": None,
                 "ocr": {"engine": "paddleocr", "models": [ocr["det_name"], ocr["rec_name"]],
                         "model_digests_pinned": bool(ocr.get("det_digest") and ocr.get("rec_digest"))},
                 "model": None,
@@ -316,19 +317,15 @@ class ApiService:
             "confidence": None,
             "evidence": evidence(raw.get("classification_evidence", [])) if document_type != UNKNOWN_DOCUMENT_TYPE else [],
         }
+        body["provenance"]["extraction_schema"] = raw.get("extraction_schema")
         model = raw.get("llm_model")
         if model:
             body["provenance"]["model"] = {"id": model, "execution_class": "LOCAL_MODEL", "data_egress": "NONE"}
         fields = []
         for field in raw.get("fields", []):
             normalized, error = None, None
-            if field["state"] == "PRESENT" and field["value_type"] in self._normalizers:
-                normalizer_id, version = self._normalizers[field["value_type"]]
-                try:
-                    value = self._registry.normalize(field["raw_value"], normalizer_id=normalizer_id, version=version)
-                    normalized = {"value": value.value, "normalizer": {"id": value.normalizer_id, "version": value.normalizer_version}}
-                except NormalizationError as exc:
-                    error = exc.code
+            if field["state"] == "PRESENT":
+                normalized, error = self._normalize(field["value_type"], field["raw_value"], snap)
             fields.append({
                 "name": field["field_name"], "value_type": field["value_type"], "state": field["state"],
                 "raw_value": field["raw_value"], "normalized": normalized, "normalization_error": error,
@@ -338,6 +335,29 @@ class ApiService:
             })
         body["fields"] = fields
         return body
+
+    def _chain(self, value_type: str, snap: dict) -> tuple[tuple[str, str], ...]:
+        if snap.get("registry"):
+            return registry_from_dict(snap["registry"]["content"]).normalizer_chain(value_type)
+        return (self._normalizers[value_type],) if value_type in self._normalizers else ()
+
+    def _normalize(self, value_type: str, raw_value: str, snap: dict) -> tuple[dict | None, str | None]:
+        """Try the configured chain in order; the first normalizer that accepts the value wins.
+
+        An ambiguity reported by any step is preferred over a plain format mismatch,
+        because it tells the operator a locale decision is needed.
+        """
+        errors = []
+        for normalizer_id, version in self._chain(value_type, snap):
+            try:
+                value = self._registry.normalize(raw_value, normalizer_id=normalizer_id, version=version)
+            except NormalizationError as exc:
+                errors.append(exc.code)
+                continue
+            return {"value": value.value, "normalizer": {"id": value.normalizer_id, "version": value.normalizer_version}}, None
+        if not errors:
+            return None, None
+        return None, next((code for code in errors if code.startswith("AMBIGUOUS")), errors[-1])
 
     # ------------------------------------------------------------ discovery
     def taxonomy(self) -> dict:
@@ -350,9 +370,22 @@ class ApiService:
     def field_schema(self, document_type: str) -> dict:
         if document_type not in self.taxonomy()["document_types"] + [UNKNOWN_DOCUMENT_TYPE]:
             raise ApiError(404, "DOCUMENT_TYPE_NOT_FOUND", "Unknown document type")
-        schema = self.panel.snapshot()["schema"]["content"]
-        return {"document_type": document_type, "schema_id": str(schema["schema_id"]), "version": str(schema["version"]),
-                "fields": [{"name": f["field_name"], "value_type": f["value_type"],
-                            "normalizer": ({"id": self._normalizers[f["value_type"]][0], "version": self._normalizers[f["value_type"]][1]}
-                                           if f["value_type"] in self._normalizers else None)}
-                           for f in schema["fields"]]}
+        snap = self.panel.snapshot()
+
+        def normalizer(value_type: str) -> dict | None:
+            chain = self._chain(value_type, snap)
+            return {"id": chain[0][0], "version": chain[0][1]} if chain else None
+
+        if snap.get("registry"):
+            registry = registry_from_dict(snap["registry"]["content"])
+            selection = registry.select(document_type)
+            schema = selection.schema
+            if schema is None:
+                return {"document_type": document_type, "schema_id": "none", "version": "0", "fields": []}
+            return {"document_type": document_type, "schema_id": schema.schema_id, "version": schema.version,
+                    "fields": [{"name": f.field_name, "value_type": f.value_type, "normalizer": normalizer(f.value_type)}
+                               for f in schema.fields]}
+        legacy = snap["schema"]["content"]
+        return {"document_type": document_type, "schema_id": str(legacy["schema_id"]), "version": str(legacy["version"]),
+                "fields": [{"name": f["field_name"], "value_type": f["value_type"], "normalizer": normalizer(f["value_type"])}
+                           for f in legacy["fields"]]}

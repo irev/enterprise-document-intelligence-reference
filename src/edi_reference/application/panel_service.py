@@ -26,6 +26,7 @@ from typing import Any, Callable, Protocol
 
 from edi_reference.application.classification import ClassificationPolicy, classify_document
 from edi_reference.application.extraction import extract_fields
+from edi_reference.application.extraction_registry import registry_from_dict
 from edi_reference.application.invocation import ProviderInvoker
 from edi_reference.application.llm_classification import LlmClassifier
 from edi_reference.application.llm_extraction import LlmFieldExtractor
@@ -270,8 +271,10 @@ class PanelService:
             content["llm"] = dict(content["llm"], model=model_override)
         if mode_override:
             content["classification_mode"] = mode_override
+        registry = self.config.get("extraction_registry") if self.config.active_version("extraction_registry") else None
         return {"pipeline": content, "pipeline_version": pipeline["version"],
-                "title_rules": self.config.get("title_rules"), "schema": self.config.get("extraction_schema")}
+                "title_rules": self.config.get("title_rules"), "schema": self.config.get("extraction_schema"),
+                "registry": registry}
 
     def ensure_model(self, model: str, say: Callable[[str], None] = lambda message: None) -> None:
         """Start the local model server and load `model` when needed (serialized with processing)."""
@@ -313,14 +316,12 @@ class PanelService:
         content = self.store.content(document_id)
         pipeline = snap["pipeline"]
         profile = title_rule_profile_from_dict(snap["title_rules"]["content"])
-        schema = schema_from_dict(snap["schema"]["content"])
         taxonomy = DocumentTaxonomy("panel", profile.taxonomy_version,
                                     frozenset(rule.document_type for rule in profile.rules))
         model = pipeline["llm"]["model"]
         result: dict = {
             "document_id": document_id, "started_at": datetime.now(UTC).isoformat(),
-            "config": {"pipeline": snap["pipeline_version"], "title_rules": snap["title_rules"]["version"],
-                       "extraction_schema": snap["schema"]["version"]},
+            "config": config_versions(snap),
             "ocr_engine": f"{pipeline['ocr']['det_name']} + {pipeline['ocr']['rec_name']}",
             "llm_model": model if use_llm else None, "classification_mode": pipeline["classification_mode"],
         }
@@ -338,10 +339,18 @@ class PanelService:
                           classifier=prediction.model_id, classify_s=round(time.perf_counter() - started, 2),
                           classification_evidence=[_evidence_view(e) for e in prediction.evidence])
             fields: list[dict] = []
-            if use_llm:
+            # The schema is chosen after classification; the one actually used is recorded.
+            if snap.get("registry"):
+                selection = registry_from_dict(snap["registry"]["content"]).select(prediction.document_type)
+                schema, descriptions = selection.schema, selection.descriptions
+                result["extraction_schema"] = None if schema is None else dict(selection.reference or {}, selection=selection.source)
+            else:
+                schema, descriptions = schema_from_dict(snap["schema"]["content"]), {}
+                result["extraction_schema"] = {"id": schema.schema_id, "version": schema.version, "selection": "LEGACY_GLOBAL"}
+            if use_llm and schema is not None:
                 provider = _provider(model, Capability.FIELD_EXTRACTION)
                 extractor = LlmFieldExtractor(schema=schema, provider=provider, policy=_LOCAL_POLICY,
-                                              limits=_LIMITS, invoker=self._invoker(model))
+                                              limits=_LIMITS, invoker=self._invoker(model), descriptions=descriptions)
                 started = time.perf_counter()
                 extracted = extract_fields(document, document_type=prediction.document_type, extractor=extractor,
                                            schema=schema)
@@ -448,6 +457,15 @@ class PanelService:
         if run is None:
             raise LookupError("RUN_NOT_FOUND")
         return run
+
+
+def config_versions(snap: dict) -> dict:
+    """Storage versions of the configuration packages a run used."""
+    versions = {"pipeline": snap["pipeline_version"], "title_rules": snap["title_rules"]["version"],
+                "extraction_schema": (snap.get("registry") or snap["schema"])["version"]}
+    if snap.get("registry"):
+        versions["extraction_registry"] = snap["registry"]["version"]
+    return versions
 
 
 _LOCAL_POLICY = ExecutionPolicy("local-only", "1", frozenset({ExecutionClass.LOCAL_MODEL}), allow_external_egress=False)
