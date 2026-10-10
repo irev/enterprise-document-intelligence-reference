@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ruang dokumen · EDI</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <span class="brand-mark">EDI / LOKAL</span><h1>Ruang dokumen</h1>
+      <p>Masuk untuk mengekstrak dan memeriksa dokumen transaksi.</p>
+      <label for="token">Token workstation</label><input id="token" type="password" required autocomplete="off">
+      <button type="submit">Masuk</button><p id="login-error" role="alert"></p>
+    </form>
+  </section>
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard"><span class="brand-mark">EDI / LOKAL</span><strong>Ruang<br>dokumen.</strong></a>
+      <nav aria-label="Menu utama">
+        <button data-view="dashboard" aria-current="page">Dashboard <span>Antrean dokumen</span></button>
+        <button data-view="workspace">Workspace <span>Periksa hasil ekstraksi</span></button>
+        <button data-view="audit">Audit History <span>Jejak koreksi operator</span></button>
+      </nav>
+      <div class="sidebar-note"><span class="status-dot"></span> Pemrosesan lokal<p id="actor"></p></div>
+    </aside>
+    <main>
+      <header class="topbar"><span>OPERASI DOKUMEN / TRANSAKSI</span><span id="connection" role="status">Menghubungkan…</span></header>
+      <p id="notice" class="notice" role="status" hidden></p>
+      <section id="dashboard" class="view">
+        <div class="page-heading"><div><p class="eyebrow">DASHBOARD</p><h1>Dokumen masuk</h1><p>Unggah, ekstrak, lalu periksa setiap nilai terhadap sumbernya.</p></div><span class="stamp">KEPUTUSAN<br>OLEH OPERATOR</span></div>
+        <div class="overview" aria-label="Ringkasan antrean">
+          <div><span id="count-all">0</span><p>Dokumen</p></div><div><span id="count-active">0</span><p>Sedang diproses</p></div><div><span id="count-review">0</span><p>Siap diperiksa</p></div>
+        </div>
+        <section id="dropzone" class="dropzone" aria-label="Unggah dokumen">
+          <div><h2>Letakkan dokumen di sini</h2><p>PDF, PNG, atau JPEG · maksimal 20 MB per file · maksimal 20 halaman</p></div>
+          <label class="file-button" for="files">Pilih dokumen<input id="files" type="file" accept="application/pdf,image/png,image/jpeg" multiple></label>
+        </section>
+        <div id="uploads" aria-live="polite"></div>
+        <details class="source"><summary>Ambil dari penyimpanan internal</summary>
+          <form id="source-form"><label for="source-name">Nama dokumen</label><input id="source-name" required maxlength="200" placeholder="invoice.pdf">
+            <label for="source-url">Pre-signed URL</label><input id="source-url" type="url" required maxlength="8192" autocomplete="off" placeholder="Tempel pre-signed URL dari penyimpanan internal"><button type="submit">Ambil dokumen</button></form>
+        </details>
+        <div class="section-heading"><h2>Antrean pemeriksaan</h2><span id="queue-count"></span></div>
+        <div class="table-scroll"><table><thead><tr><th>Dokumen</th><th>Diterima</th><th>Status</th><th>Progres</th><th><span class="sr-only">Tindakan</span></th></tr></thead><tbody id="queue"></tbody></table></div>
+        <p id="empty-queue" class="empty">Belum ada dokumen. Unggah dokumen pertama untuk memulai.</p>
+      </section>
+      <section id="workspace" class="view" hidden>
+        <div class="page-heading"><div><p class="eyebrow">WORKSPACE</p><h1 id="document-title">Periksa dokumen</h1><p id="document-subtitle">Pilih dokumen dari antrean untuk membuka hasilnya.</p></div><button id="reprocess" class="secondary" hidden>Proses ulang</button></div>
+        <p id="empty-workspace" class="empty">Buka dokumen melalui Dashboard.</p>
+        <div id="workspace-content" hidden>
+          <div class="review-banner">Hasil ekstraksi adalah prediksi. Periksa sumber sebelum menggunakan data untuk keputusan bisnis.</div>
+          <div class="split">
+            <section class="document-pane" aria-label="Penampil dokumen">
+              <div class="viewer-toolbar"><label for="page-select">Halaman</label><select id="page-select"></select><label for="zoom">Zoom</label><select id="zoom"><option value="fit">Sesuai lebar</option><option value="large">150%</option><option value="larger">200%</option></select></div>
+              <div class="viewer-scroll"><div id="page-canvas" class="page-canvas"><img id="page-image" alt="Halaman dokumen yang diproses"><svg id="evidence-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Lokasi bukti ekstraksi"><rect id="evidence-box" hidden></rect></svg></div></div>
+              <p class="viewer-caption">Tampilan setelah optimasi dan pelurusan. Pilih “Lihat bukti” untuk menandai sumber nilai.</p>
+            </section>
+            <section class="extraction-pane"><div class="section-heading"><h2>Hasil ekstraksi</h2><span id="subtype" class="badge"></span></div>
+              <p class="muted">Confidence belum terkalibrasi; warna membantu prioritas pemeriksaan.</p><p id="result-warning" class="warning" hidden></p>
+              <form id="review-form"><div id="fields"></div><button id="save-review" type="submit">Simpan koreksi</button><p id="review-state" class="muted"></p></form>
+              <details id="items-panel"><summary>Baris tabel yang diekstrak</summary><ol id="line-items"></ol></details>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section id="audit" class="view" hidden><div class="page-heading"><div><p class="eyebrow">AUDIT HISTORY</p><h1>Jejak pemeriksaan</h1><p>Hasil mesin tetap tersimpan. Setiap koreksi menambah revisi terpisah.</p></div></div><div id="audit-content" class="empty">Buka dokumen untuk melihat riwayatnya.</div></section>
+    </main>
+  </div>
+</body>
+</html>
