@@ -51,7 +51,7 @@ Verify:
 
 ```text
 python -m pytest
-edi --help
+tlkdoc --help
 tlkdoc providers list
 tlkdoc models list
 ```

@@ -17,7 +17,7 @@ CLI and Web Admin MUST call the same runtime-management application operations. 
 | Tier map advisory | `tlkdoc serve recommend` | API `serve.recommend` (advisory only; never selects execution paths); local panel `GET /admin/runtime/servers/recommendations` |
 | Plan provider install | `tlkdoc install --provider ... --profile ... --dry-run` | `POST /admin/runtime/providers/{id}/install-plans` |
 | Execute provider install | `tlkdoc install ... --yes` | Local `tlkdoc web` panel: `POST /admin/runtime/providers/{id}/install` with `{"profile": "...", "confirm": true}` (confirm-gated, loopback, unauthenticated). Deployed Web Admin: **reserved** until privileged execution boundary is implemented |
-| Verify provider | `edi ...` (planned) | reserved |
+| Verify provider | `tlkdoc ...` (planned) | reserved |
 | Pull model | `tlkdoc models pull ... --yes` | Local `tlkdoc web` panel: `POST /admin/runtime/models/{id}/pull` with `{"profile": "...", "confirm": true}`. Deployed Web Admin: **reserved** |
 | Verify model | `tlkdoc models verify` | reserved |
 | List local inference servers | `tlkdoc serve list` | API `serve.list` (optional `runtime_root` for detection beyond PATH); local panel `GET /admin/runtime/servers` |
