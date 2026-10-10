@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -44,14 +45,27 @@ def add_parsers(commands, *, runtime_root: Path) -> None:
                        help="also serve the v1 data-plane API for applications on this port (same bind and TLS)")
 
     apps = commands.add_parser("app", help="manage applications that use the v1 data-plane API")
-    apps.add_argument("action", choices=("add", "list", "key", "revoke", "disable", "enable"))
-    apps.add_argument("name", nargs="?", help="application id (add/key/disable/enable) or key id (revoke)")
+    apps.add_argument("action", choices=("add", "list", "key", "revoke", "disable", "enable", "profiles"))
+    apps.add_argument("name", nargs="?", help="application id (add/key/disable/enable/profiles) or key id (revoke)")
     apps.add_argument("--tenant", help="tenant id for a new application")
     apps.add_argument("--display-name")
     apps.add_argument("--scopes", default="documents:write,documents:read,results:read")
     apps.add_argument("--rate-per-minute", type=int, default=60)
     apps.add_argument("--max-queued", type=int, default=100)
+    apps.add_argument("--allowed", help="profiles: comma-separated processing profiles the application may use")
+    apps.add_argument("--default", dest="default_profile", help="profiles: default processing profile (must be allowed)")
     apps.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
+
+    storage = commands.add_parser("storage", help="manage tenant storage connections for STORAGE_REFERENCE submissions")
+    storage.add_argument("action", choices=("add", "list", "disable", "enable"))
+    storage.add_argument("connection_id", nargs="?")
+    storage.add_argument("--tenant", help="tenant that owns the storage")
+    storage.add_argument("--broker-url", help="HTTPS URL of the tenant's grant broker")
+    storage.add_argument("--origin", action="append", default=[],
+                         help="https://host[:port] a grant may point to (repeatable)")
+    storage.add_argument("--allow-private-network", action="store_true",
+                         help="allow private/loopback addresses for this connection (never link-local or metadata)")
+    storage.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
 
     users = commands.add_parser("panel-user", help="manage control-panel users")
     users.add_argument("action", choices=("add", "passwd", "role", "disable", "enable", "list"))
@@ -82,6 +96,8 @@ def run(args: argparse.Namespace) -> int:
         return _users(args)
     if args.command == "app":
         return _apps(args)
+    if args.command == "storage":
+        return _storage(args)
     import logging
     import threading
 
@@ -125,8 +141,6 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _apps(args) -> int:
-    import re
-
     from edi_reference.adapters.sqlite_api_store import SqliteApiStore
     from edi_reference.application.api_service import issue_key
 
@@ -159,6 +173,11 @@ def _apps(args) -> int:
             return 0
         elif args.action == "revoke":
             store.revoke_key(args.name)
+        elif args.action == "profiles":
+            allowed = [p.strip() for p in (args.allowed or "").split(",") if p.strip()]
+            if any(not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", p) for p in allowed):
+                raise ValueError("INVALID_PROFILE_ID")
+            store.set_application_profiles(args.name, allowed, args.default_profile or (allowed[0] if allowed else ""))
         else:
             store.set_application_disabled(args.name, args.action == "disable")
     except (ValueError, LookupError) as exc:
@@ -167,6 +186,49 @@ def _apps(args) -> int:
     finally:
         store.close()
     print(f"ok: {args.action} {args.name}")
+    return 0
+
+
+def _storage(args) -> int:
+    from edi_reference.adapters.restricted_http import FileSecretStore
+    from edi_reference.adapters.sqlite_api_store import SqliteApiStore
+    from edi_reference.application.source_fetch import Origin, StorageConnection
+
+    store = SqliteApiStore(args.state_dir / "api.sqlite3")
+    try:
+        if args.action == "list":
+            for row in store.connections():
+                state = "disabled" if row["disabled"] else "active"
+                private = "\tprivate-network" if row["allow_private_network"] else ""
+                print(f"{row['connection_id']}\ttenant={row['tenant_id']}\t{state}\tbroker={row['broker_url']}"
+                      f"\torigins={','.join(row['origins'])}{private}")
+            return 0
+        if not args.connection_id:
+            raise ValueError("CONNECTION_ID_REQUIRED")
+        if args.action == "add":
+            if not args.tenant or not re.fullmatch(r"[a-z][a-z0-9-]{1,62}", args.tenant):
+                raise ValueError("TENANT_ID_REQUIRED (lowercase letters, digits, '-')")
+            if not args.broker_url or not args.origin:
+                raise ValueError("BROKER_URL_AND_ORIGIN_REQUIRED")
+            if store.connection(args.connection_id) is not None:
+                raise ValueError("STORAGE_CONNECTION_EXISTS")
+            connection = StorageConnection(args.connection_id, args.tenant, args.broker_url,
+                                           tuple(Origin.parse(o) for o in args.origin),
+                                           allow_private_network=args.allow_private_network)
+            secret = FileSecretStore(args.state_dir / "storage-secrets").create(connection.connection_id)
+            store.create_connection(connection_id=connection.connection_id, tenant_id=connection.tenant_id,
+                                    broker_url=connection.broker_url, origins=[str(o) for o in connection.origins],
+                                    allow_private_network=connection.allow_private_network, created_by="cli")
+            print(f"broker secret: {secret}")
+            print("Configure this secret in the tenant's grant broker now; it cannot be shown again.")
+            return 0
+        store.set_connection_disabled(args.connection_id, args.action == "disable")
+    except (ValueError, LookupError, FileExistsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        store.close()
+    print(f"ok: {args.action} {args.connection_id}")
     return 0
 
 

@@ -91,3 +91,42 @@ def test_app_command_creates_application_and_one_time_key(tmp_path, capsys):
     listing = capsys.readouterr().out
     assert "app-demo\ttenant=tenant-demo\tactive" in listing and token.split(".")[1] not in listing
     assert cli.main(["app", "add", "app-demo", "--tenant", "tenant-demo", "--state-dir", state]) == 2
+
+
+def test_app_profiles_command(tmp_path, capsys):
+    from edi_reference import cli
+    from edi_reference.adapters.sqlite_api_store import SqliteApiStore
+
+    state = str(tmp_path)
+    assert cli.main(["app", "add", "app-demo", "--tenant", "tenant-demo", "--state-dir", state]) == 0
+    assert cli.main(["app", "profiles", "app-demo", "--allowed", "default,careful", "--default", "careful",
+                     "--state-dir", state]) == 0
+    assert cli.main(["app", "profiles", "app-demo", "--allowed", "default", "--default", "careful",
+                     "--state-dir", state]) == 2
+    store = SqliteApiStore(tmp_path / "api.sqlite3")
+    app = store.application("app-demo")
+    store.close()
+    assert app["allowed_profiles"] == ["careful", "default"] and app["default_profile"] == "careful"
+
+
+def test_storage_command_registers_connection_and_one_time_secret(tmp_path, capsys):
+    from edi_reference import cli
+
+    state = str(tmp_path)
+    base = ["storage", "add", "store-demo", "--tenant", "tenant-demo", "--broker-url", "https://broker.example.test/grants",
+            "--origin", "https://objects.example.test", "--state-dir", state]
+    assert cli.main(base) == 0
+    secret = next(line.split()[2] for line in capsys.readouterr().out.splitlines() if line.startswith("broker secret:"))
+    assert (tmp_path / "storage-secrets" / "store-demo.key").read_text(encoding="ascii") == secret
+    assert cli.main(base) == 2  # already exists
+    assert cli.main(["storage", "disable", "store-demo", "--state-dir", state]) == 0
+    assert cli.main(["storage", "list", "--state-dir", state]) == 0
+    listing = capsys.readouterr().out
+    assert "store-demo\ttenant=tenant-demo\tdisabled" in listing and secret not in listing
+    assert "origins=https://objects.example.test:443" in listing
+    for bad in (["--broker-url", "http://broker.example.test/g"], ["--origin", "https://objects.example.test/path"]):
+        args = ["storage", "add", "store-two", "--tenant", "tenant-demo", "--broker-url", "https://b.example.test/g",
+                "--origin", "https://objects.example.test", "--state-dir", state]
+        args[args.index(bad[0]) + 1] = bad[1]
+        assert cli.main(args) == 2
+    assert not (tmp_path / "storage-secrets" / "store-two.key").exists()
