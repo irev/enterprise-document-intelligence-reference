@@ -156,6 +156,8 @@ def _run(args) -> int:
         for index, doc in enumerate(docs, 1):
             meta = panel.store.put(Path(doc["path"]).read_bytes(), Path(doc["path"]).name, uploaded_by="eval")
             result = panel.service.process_document(meta["document_id"], snap, use_llm=use_llm)
+            # Also a normal panel result, so `tlkdoc serve-panel --state-dir <same>` shows progress live.
+            panel.store.save_result(meta["document_id"], dict(result, processed_by="eval"))
             record = {"doc_key": doc["doc_key"], "sha256": meta["document_id"], "status": result.get("status"),
                       "error_code": result.get("error_code"), "document_type": result.get("document_type"),
                       "classification_source": result.get("classification_source"), "mode": args.mode,
