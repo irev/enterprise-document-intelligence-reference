@@ -42,7 +42,7 @@ def system_resolver(host: str, port: int) -> list[str]:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror:
         raise SourceError("SOURCE_UNREACHABLE", permanent=False) from None
-    return sorted({info[4][0] for info in infos})
+    return sorted({str(info[4][0]) for info in infos})
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):

@@ -4,6 +4,7 @@ import json
 import socket
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -435,7 +436,11 @@ def test_discovery_endpoints(env):
 def test_requests_are_audited_without_secrets(env):
     upload(env)
     call(env, "GET", "/v1/documents", key="garbage")
-    text = (env["tmp"] / "audit.jsonl").read_text(encoding="utf-8")
+    # The handler audits in `finally`, after the response is sent: wait for the record.
+    deadline = time.monotonic() + 5
+    while '"outcome": "401"' not in (text := (env["tmp"] / "audit.jsonl").read_text(encoding="utf-8")) \
+            and time.monotonic() < deadline:
+        time.sleep(0.02)
     assert '"action": "api.post"' in text and '"outcome": "401"' in text
     assert all(token.split(".")[1] not in text for token in env["keys"].values())
 
