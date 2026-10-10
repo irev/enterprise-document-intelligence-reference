@@ -158,7 +158,7 @@ def check_address(address: str, *, allow_private_network: bool) -> None:
 
 def fetch_verified(reference: SourceReference, binding: GrantBinding, connection: StorageConnection, *,
                    broker: GrantBroker, fetcher: ObjectFetcher, max_bytes: int) -> bytes:
-    """Grant → fetch → verify, refreshing an expired grant once. The grant never leaves this frame."""
+    """Grant → fetch → verify, refreshing a refused grant once. The grant never leaves this frame."""
     if connection.disabled:
         raise SourceError("STORAGE_CONNECTION_DISABLED", permanent=True)
     if binding.tenant_id != connection.tenant_id:
@@ -172,11 +172,13 @@ def fetch_verified(reference: SourceReference, binding: GrantBinding, connection
             if exc.code == "SOURCE_GRANT_EXPIRED":
                 if attempt == 1:
                     continue
-                raise SourceError("SOURCE_GRANT_EXPIRED", permanent=True) from None
+                # Storage still refuses a freshly issued grant: treat it as revoked or denied, not
+                # as expiry, and do not refresh again (blueprint §3.3).
+                raise SourceError("SOURCE_ACCESS_DENIED", permanent=True) from None
             raise
         finally:
             del grant
         if hashlib.sha256(content).hexdigest() != reference.sha256:
             raise SourceError("SOURCE_CHECKSUM_MISMATCH", permanent=True)
         return content
-    raise SourceError("SOURCE_GRANT_EXPIRED", permanent=True)
+    raise SourceError("SOURCE_ACCESS_DENIED", permanent=True)  # unreachable; keeps the type checker exact

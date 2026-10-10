@@ -294,7 +294,7 @@ Decision record: [ADR-0001](adr/ADR-0001-storage-references-instead-of-caller-ur
   - The grant is never stored, logged, audited or returned.
 - **Failures.**
   - Transient failures (unreachable, broker unavailable, timeouts) are retried within the job's 3 attempts.
-  - An expired grant is refreshed once.
+  - A grant refused by storage (`401`/`403`) is refreshed once. If storage also refuses the new grant, the result is `SOURCE_ACCESS_DENIED`, without a further refresh.
   - Every other source failure is recorded at once as `FAILED_SAFE` with the source code (for example `SOURCE_OBJECT_MISSING`, `SOURCE_CHECKSUM_MISMATCH`, `SOURCE_HOST_FORBIDDEN`) and no extraction.
 - **Reference broker.** `scripts/reference_grant_broker.py` is a standard-library broker and object server for development and tests. It is not a production component. Production also needs network egress policy (blueprint NET-003) and a secrets manager.
 

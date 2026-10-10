@@ -143,13 +143,14 @@ def test_checksum_mismatch_is_permanent():
     assert info.value.permanent
 
 
-def test_expired_grant_is_refreshed_once():
+def test_refused_grant_is_refreshed_once_then_treated_as_denied():
     broker = FakeBroker()
     expired = SourceError("SOURCE_GRANT_EXPIRED", permanent=False)
     assert fetch(FakeFetcher(expired, CONTENT), broker) == CONTENT and broker.calls == 2
-    with pytest.raises(SourceError, match="SOURCE_GRANT_EXPIRED") as info:
-        fetch(FakeFetcher(expired, SourceError("SOURCE_GRANT_EXPIRED", permanent=False)))
-    assert info.value.permanent
+    broker = FakeBroker()
+    with pytest.raises(SourceError, match="SOURCE_ACCESS_DENIED") as info:
+        fetch(FakeFetcher(expired, SourceError("SOURCE_GRANT_EXPIRED", permanent=False)), broker)
+    assert info.value.permanent and broker.calls == 2  # no third grant
 
 
 def test_transient_failure_is_not_permanent():

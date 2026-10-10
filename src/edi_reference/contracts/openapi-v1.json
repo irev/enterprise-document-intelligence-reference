@@ -223,7 +223,7 @@
       "EventType": {"enum": ["document.completed", "document.failed_safe", "document.rejected"]},
       "StorageReferenceSubmission": {
         "type": "object", "additionalProperties": false, "required": ["source"],
-        "description": "Errors: CALLER_URL_NOT_ACCEPTED, SOURCE_METHOD_NOT_SUPPORTED, INVALID_SOURCE, INVALID_STORAGE_CONNECTION_ID, INVALID_OBJECT_ID, SHA256_REQUIRED, INVALID_VERSION_ID (400); STORAGE_CONNECTION_NOT_FOUND (404). Fetch failures after acceptance end in a FAILED_SAFE result whose failure.code is one of SOURCE_ACCESS_DENIED, SOURCE_OBJECT_MISSING, SOURCE_GRANT_EXPIRED, SOURCE_HOST_FORBIDDEN, SOURCE_REDIRECT_REFUSED, SOURCE_TOO_LARGE, SOURCE_CHECKSUM_MISMATCH, SOURCE_BROKER_INVALID_RESPONSE, UNSUPPORTED_MEDIA_TYPE or PROCESSING_ATTEMPTS_EXHAUSTED.",
+        "description": "Errors: CALLER_URL_NOT_ACCEPTED, SOURCE_METHOD_NOT_SUPPORTED, INVALID_SOURCE, INVALID_STORAGE_CONNECTION_ID, INVALID_OBJECT_ID, SHA256_REQUIRED, INVALID_VERSION_ID (400); STORAGE_CONNECTION_NOT_FOUND (404). Fetch failures after acceptance end in a FAILED_SAFE result whose failure.code is one of SOURCE_ACCESS_DENIED (also when storage refuses a freshly issued grant), SOURCE_OBJECT_MISSING, SOURCE_HOST_FORBIDDEN, SOURCE_REDIRECT_REFUSED, SOURCE_TOO_LARGE, SOURCE_CHECKSUM_MISMATCH, SOURCE_BROKER_INVALID_RESPONSE, UNSUPPORTED_MEDIA_TYPE or PROCESSING_ATTEMPTS_EXHAUSTED.",
         "properties": {
           "source": {
             "type": "object", "additionalProperties": false, "required": ["method", "storage_connection_id", "object_id", "sha256"],
