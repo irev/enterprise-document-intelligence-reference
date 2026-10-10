@@ -76,7 +76,7 @@ All endpoints except `/v1/health` require a key. Scopes are shown per endpoint.
 | `X-Filename` | no (upload) | Display name only. Path components are stripped. |
 | `X-Processing-Profile` | no | Must be in the application's allowed profiles; defaults to the application's default profile. |
 | `X-External-Reference` | no | The caller's own reference, `key=value` and repeatable, max 10. Stored and returned; never interpreted. |
-| `source` (URL mode) | yes | `{"method":"SIGNED_URL","url":"https://…","expected_sha256":"…"}`. Fetched only from the admin allow-list, with the full RI-1.6 SSRF rules (DNS/IP validation, no private ranges unless explicitly allowed, redirect re-validation, size and time limits). Query values are never logged. |
+| `source` (storage reference) | yes | `{"method":"STORAGE_REFERENCE","storage_connection_id":"…","object_id":"…","sha256":"…","version_id":"…"?}`. The object is fetched just in time through the tenant's grant broker (ADR-0001, §14). Caller-supplied URLs (`SIGNED_URL`) are rejected with `CALLER_URL_NOT_ACCEPTED`; this replaces the URL mode of the original design. |
 
 `CONNECTOR` sources (shared folders, DMS) remain control-plane configuration (RI-1.6). They are planned for v1.1, not part of v1.
 
@@ -152,7 +152,7 @@ Tlkdoc-Signature: t=1760000000,v1=<hex HMAC-SHA256(secret, t + "." + body)>
 - **Authorization:** checked on every request: scope, ownership (D3) and allowed processing profile. The tenant and application come only from the key, never from request content.
 - **Limits per application** (configurable): requests per minute, concurrent queued documents, max bytes (default 50 MB) and max pages (default 20). Exceeding them returns `429` or `413` with `Retry-After` where applicable.
 - **Untrusted content:** document content cannot change routing, profile, schema, tenant or authorization (AGENTS rule 11).
-- **Data stays local:** OCR and LLM run on the host only. Policy rejects any non-loopback model endpoint (`DataEgress.NONE`). Outbound traffic is limited to allow-listed URL fetches and webhooks carrying identifiers.
+- **Data stays local:** OCR and LLM run on the host only. Policy rejects any non-loopback model endpoint (`DataEgress.NONE`). Outbound traffic is limited to registered grant brokers and storage origins (ADR-0001) and webhooks carrying identifiers.
 
 ## 8. Errors
 
@@ -163,11 +163,11 @@ Tlkdoc-Signature: t=1760000000,v1=<hex HMAC-SHA256(secret, t + "." + body)>
 
 | Status | Codes (examples) |
 |---|---|
-| 400 | `INVALID_REQUEST`, `IDEMPOTENCY_KEY_REQUIRED`, `SOURCE_URL_INVALID`, `PROFILE_NOT_ALLOWED` |
+| 400 | `INVALID_REQUEST`, `IDEMPOTENCY_KEY_REQUIRED`, `CALLER_URL_NOT_ACCEPTED`, `INVALID_OBJECT_ID`, `SHA256_REQUIRED`, `PROFILE_NOT_ALLOWED` |
 | 401 | `API_KEY_REQUIRED`, `API_KEY_INVALID` |
-| 403 | `SCOPE_REQUIRED`, `SOURCE_HOST_FORBIDDEN` |
-| 404 | `DOCUMENT_NOT_FOUND`, `RESULT_NOT_FOUND`, also returned for other applications' documents |
-| 409 | `IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST` |
+| 403 | `SCOPE_REQUIRED` |
+| 404 | `DOCUMENT_NOT_FOUND`, `RESULT_NOT_FOUND`, `STORAGE_CONNECTION_NOT_FOUND`, also returned for other applications' documents and other tenants' connections |
+| 409 | `IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST`, `PROCESSING_ALREADY_PENDING` |
 | 413 | `DOCUMENT_TOO_LARGE`, `PAGE_LIMIT_EXCEEDED` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
 | 429 | `RATE_LIMITED`, `QUEUE_LIMIT_REACHED` |
@@ -178,7 +178,7 @@ Tlkdoc-Signature: t=1760000000,v1=<hex HMAC-SHA256(secret, t + "." + body)>
 | Phase | Scope | Builds on |
 |---|---|---|
 | **A** | Application registry and API keys (panel and `tlkdoc app`); SQLite store for inbound, idempotency, documents, jobs and results; `POST /v1/documents` (upload), status, result list and result; result v1 mapping with normalization; `/v1/taxonomy`, `/v1/schemas`, `/v1/health`, `/v1/openapi.json`; per-app limits. | `inbound.receive_document`, RI-1.11 fingerprint, `ProcessingResult`, normalizers, panel worker |
-| **B** | URL submission with SSRF-hardened fetcher and allow-list; `reprocess`; processing profiles per application. | RI-1.6, RI-1.10 refetch, `processing_profile` |
+| **B** | Storage-reference submission with just-in-time grants and a restricted fetcher (ADR-0001, replacing caller URLs); `reprocess`; processing profiles per application. | RI-1.6, RI-1.10 refetch, `processing_profile` |
 | **C** | Webhooks through the outbox with HMAC signing, retries and a delivery view in the panel. | RI-5.2 outbox, `DeliveryAttempt` |
 | **D** | Per-type extraction schemas (for example tax invoice: seller/buyer tax id, tax base, VAT) and an Indonesian date normalizer (`15 Juli 2026`, `15/07/2026`), with strict RI-3.11 rules. | field schema registry, RI-3.11 |
 | **E** | Review API: human correction as a new version with `origin: HUMAN`. | `human_review`, migration 0016 |
@@ -216,7 +216,7 @@ Behaviour:
 - **Shared pipeline.** The API and the panel share one pipeline and one OCR/GPU worker (`PanelService.processing_lock`). Uploaded bytes go into the same content-addressed store; ownership is held by the API document record.
 - **Interrupted work.** A job interrupted by a crash or a model server that is down is retried when its lease expires (15 minutes), up to 3 attempts. After that a `FAILED_SAFE` result with `PROCESSING_ATTEMPTS_EXHAUSTED` is recorded. There is no silent rules-only fallback.
 - **Normalizers.** Only the existing ones are wired: `money.id-ID.IDR`, `date.iso-8601` and `identifier.trimmed`. Other formats keep their raw value with a stable `normalization_error`. For example, `15 Juli 2026` and `September 20, 2026` give `INVALID_DATE_FORMAT`, and `Rp349,000.00` gives `INVALID_MONEY_FORMAT`. Wider normalizers are phase D.
-- **Not yet available:** URL submission (`SOURCE_METHOD_NOT_AVAILABLE`), `reprocess`, processing profiles beyond `default`, and webhooks.
+- **Not yet available in phase A:** URL submission, `reprocess`, processing profiles beyond `default`, and webhooks. Phase B (§14) adds all of these except webhooks.
 
 Verification at the time of writing:
 
@@ -269,3 +269,51 @@ The seed chains are: date = ISO → textual → numeric-unambiguous; money = mul
 - Splitting multi-document packages.
 - Form-based registry editing; the panel edits the registry as versioned JSON.
 - The RoP workspace still uses its own categories and fields; it does not read this registry yet.
+
+## 14. Phase B — storage references, reprocess and profiles
+
+Decision record: [ADR-0001](adr/ADR-0001-storage-references-instead-of-caller-urls.md). It replaces the `SIGNED_URL` mode of §4, which was never implemented.
+
+### Storage references
+
+- **Storage connections.** An administrator registers one per tenant with `tlkdoc storage add <id> --tenant … --broker-url https://… --origin https://host[:port] [--allow-private-network]`.
+  - The broker secret is printed once and kept as a file under `<state>/storage-secrets/`, never in the database.
+  - `list`, `disable` and `enable` are also available.
+- **Submission.** `POST /v1/documents` with `application/json`:
+  - The body is `{"source": {"method": "STORAGE_REFERENCE", "storage_connection_id", "object_id", "sha256", "version_id"?, "filename"?}}`.
+  - The connection must belong to the key's tenant and be enabled; otherwise the answer is `404 STORAGE_CONNECTION_NOT_FOUND`.
+  - The object is not fetched at submission time. `media_type` is `null` in the document view until it is.
+- **Fetch.** Just before processing, the worker asks the broker for a grant.
+  - The grant request is signed (`X-Tlkdoc-Signature: v1=HMAC-SHA256(secret, timestamp + "." + body)`) and bound to tenant, connection, document, object, version, `GET` and a nonce.
+  - The worker fetches the object with the restricted client:
+    - HTTPS only, to registered origins only;
+    - DNS checked and the connection pinned to the checked address;
+    - link-local and metadata addresses always refused; private and loopback addresses only when the connection allows them;
+    - no redirects, and a bounded body.
+  - It then verifies `sha256` and the media type before OCR.
+  - The grant is never stored, logged, audited or returned.
+- **Failures.**
+  - Transient failures (unreachable, broker unavailable, timeouts) are retried within the job's 3 attempts.
+  - A grant refused by storage (`401`/`403`) is refreshed once. If storage also refuses the new grant, the result is `SOURCE_ACCESS_DENIED`, without a further refresh.
+  - Every other source failure is recorded at once as `FAILED_SAFE` with the source code (for example `SOURCE_OBJECT_MISSING`, `SOURCE_CHECKSUM_MISMATCH`, `SOURCE_HOST_FORBIDDEN`) and no extraction.
+- **Reference broker.** `scripts/reference_grant_broker.py` is a standard-library broker and object server for development and tests. It is not a production component. Production also needs network egress policy (blueprint NET-003) and a secrets manager.
+
+### Reprocess and profiles
+
+- **Reprocess.** `POST /v1/documents/{id}/reprocess` accepts an optional body `{"processing_profile": "…"}` and requires an `Idempotency-Key`.
+  - It queues a new run and appends a result version. Earlier versions are unchanged.
+  - Only the owning application may reprocess. `documents:read:tenant` does not grant writes.
+  - A run that is still pending gives `409 PROCESSING_ALREADY_PENDING`.
+- **Profiles.** Set them with `tlkdoc app profiles <app> --allowed a,b --default a`. A reprocess run records its own profile in `provenance.processing_profile`.
+
+### Contract impact
+
+- **`tlkdoc.result/v1`.** `source.media_type` and `source.byte_length` may be `null`, but only on `FAILED_SAFE`, when a referenced document was never fetched. This change is additive (a relaxation). In the specification, a source observation (with `byte_length` ≥ 1) exists only after acquisition, so a document that was never acquired has none. Example: `docs/api/examples/result-failed-safe-source.json`.
+- **OpenAPI.** `UrlSubmission` is replaced by `StorageReferenceSubmission`, and `POST /v1/documents` gains a `404` response.
+
+### Verification
+
+- Policy, client, broker client and store tests use fakes only, with no network (`tests/unit/test_source_fetch.py`).
+- HTTP-level tests cover submission, just-in-time fetch, fail-safe source failures, retry, reprocess and ownership. Every result is validated against the schema, and a check confirms that the bearer URL appears in no stored file or result (`tests/unit/test_api_v1.py`).
+- Further tests cover the CLI and the reference broker (signature, replay, path containment).
+- Not yet run: an end-to-end fetch over real TLS with the reference broker.

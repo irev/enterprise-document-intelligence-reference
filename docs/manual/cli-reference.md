@@ -24,7 +24,7 @@ variables and container names.
 - Machine-readable output: `doctor`, `models pull`, `models verify`, `install`,
   `process`, `config --json`, `ps --json`, `serve * --json` and `tlkdoc api` emit JSON;
   `providers list` and `models list` are plain text.
-  For a uniform request/response contract use [`tlkdoc api`](#edi-api-stdin--stdout-json-api).
+  For a uniform request/response contract use [`tlkdoc api`](#tlkdoc-api-stdinstdout-json-api).
 
 ### Running with uv / uvx
 

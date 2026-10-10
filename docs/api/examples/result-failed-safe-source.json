@@ -1,0 +1,41 @@
+{
+  "schema": "tlkdoc.result/v1",
+  "result_id": "res_01JA0Q7K3B4C5D6E7F",
+  "result_version": 1,
+  "document_id": "doc_01JA0Q6Z2Y3X4W5V6U",
+  "tenant_id": "tenant-synthetic",
+  "application_id": "app-procurement-demo",
+  "processing_run_id": "run_01JA0Q7G7H8J9K0L1M",
+  "correlation_id": "corr-0003",
+  "status": "FAILED_SAFE",
+  "failure": {"code": "SOURCE_OBJECT_MISSING"},
+  "created_at": "2026-10-11T09:12:05Z",
+  "source": {
+    "sha256": "5f1e2d3c4b5a69788796a5b4c3d2e1f05f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "media_type": null,
+    "byte_length": null,
+    "pages_total": null,
+    "pages_processed": 0,
+    "filename": "synthetic-invoice.pdf",
+    "external_references": {"po_number": "PO-SYN-7"}
+  },
+  "classification": {
+    "document_type": "UNKNOWN",
+    "abstained": true,
+    "method": "NONE",
+    "taxonomy": {"id": "business-documents", "version": "business-documents-2"},
+    "classifier": {"id": "title-rules/title-rules-id-en", "version": "2"},
+    "confidence": null,
+    "evidence": []
+  },
+  "fields": [],
+  "provenance": {
+    "processing_profile": {"id": "default", "version": 1},
+    "configuration": {"pipeline": 3, "title_rules": 2, "extraction_schema": 1},
+    "extraction_schema": null,
+    "ocr": {"engine": "paddleocr", "models": ["PP-OCRv3_mobile_det", "en_PP-OCRv4_mobile_rec"], "model_digests_pinned": true},
+    "model": null
+  },
+  "review": {"required": true, "status": "NOT_REVIEWED"},
+  "notice": "Machine result. Not a business approval or authorization."
+}

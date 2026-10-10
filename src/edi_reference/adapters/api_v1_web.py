@@ -23,6 +23,8 @@ STATIC = {"/v1/openapi.json": "openapi-v1.json", "/v1/result-v1.schema.json": "r
 DOCUMENT_STATUSES = {"RECEIVED", "ACCEPTED", "PROCESSING", "COMPLETED", "FAILED_SAFE", "REJECTED", "UNSUPPORTED"}
 UPLOAD_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/tiff"}
 DOC = r"(doc_[0-9A-Z]{26})"
+MAX_JSON_BYTES = 16 * 1024
+REFERENCE_KEYS = {"method", "storage_connection_id", "object_id", "sha256", "version_id", "filename"}
 
 
 def document_view(row: dict) -> dict:
@@ -31,7 +33,7 @@ def document_view(row: dict) -> dict:
         links["latest_result"] = f"/v1/documents/{row['document_id']}/results/{row['latest_result_version']}"
     return {"document_id": row["document_id"], "status": row["status"], "status_code": row["status_code"],
             "correlation_id": row["correlation_id"], "processing_profile": row["profile"], "filename": row["filename"],
-            "media_type": row["media_type"], "sha256": row["sha256"], "external_references": row["external_references"],
+            "media_type": row["media_type"] or None, "sha256": row["sha256"], "external_references": row["external_references"],
             "created_at": row["created_at"], "updated_at": row["updated_at"],
             "latest_result_version": row["latest_result_version"], "links": links}
 
@@ -131,7 +133,7 @@ def make_handler(service: ApiService, audit: AuditLog, *, port: int, tls: bool, 
             principal.require("documents:write")
             content_type = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
             if content_type == "application/json":
-                raise ApiError(400, "SOURCE_METHOD_NOT_AVAILABLE", "URL submission is not available yet; upload the bytes")
+                return self.submit_reference(principal)
             if content_type not in UPLOAD_TYPES:
                 raise ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "Unsupported media type")
             length = self.headers.get("Content-Length")
@@ -150,6 +152,63 @@ def make_handler(service: ApiService, audit: AuditLog, *, port: int, tls: bool, 
             view = document_view(document)
             status = 200 if replayed else 202
             self._send(status, view, headers={"Location": view["links"]["self"]})
+            return status
+
+        def _json_body(self, *, required: bool) -> dict:
+            length = self.headers.get("Content-Length")
+            if length is None or not length.isdecimal():
+                if required:
+                    raise ApiError(411, "LENGTH_REQUIRED", "Content-Length required")
+                length = "0"
+            if int(length) > MAX_JSON_BYTES:
+                raise ApiError(413, "REQUEST_TOO_LARGE", "Request body too large")
+            raw = self.rfile.read(int(length))
+            self._body_read = True
+            if not raw and not required:
+                return {}
+            try:
+                payload = json.loads(raw)
+            except (ValueError, UnicodeDecodeError):
+                raise ApiError(400, "INVALID_JSON", "Request body is not valid JSON") from None
+            if not isinstance(payload, dict):
+                raise ApiError(400, "INVALID_JSON", "Request body must be a JSON object")
+            return payload
+
+        def submit_reference(self, principal: ApiPrincipal) -> int:
+            payload = self._json_body(required=True)
+            source = payload.get("source")
+            if set(payload) != {"source"} or not isinstance(source, dict):
+                raise ApiError(400, "INVALID_SOURCE", "Body must be {\"source\": {...}}")
+            if source.get("method") == "SIGNED_URL":
+                # ADR-0001: caller-supplied URLs are never fetched.
+                raise ApiError(400, "CALLER_URL_NOT_ACCEPTED", "Caller URLs are not accepted; use STORAGE_REFERENCE")
+            if source.get("method") != "STORAGE_REFERENCE":
+                raise ApiError(400, "SOURCE_METHOD_NOT_SUPPORTED", "Unsupported source method")
+            if not set(source) <= REFERENCE_KEYS or (source.get("filename") is not None
+                                                    and not isinstance(source["filename"], str)):
+                raise ApiError(400, "INVALID_SOURCE", "Unknown or invalid source property")
+            document, replayed = service.submit_reference(
+                principal, source, idempotency_key=self.headers.get("Idempotency-Key"),
+                correlation_id=self.headers.get("X-Correlation-Id"),
+                filename=source.get("filename") or self.headers.get("X-Filename"),
+                profile=self.headers.get("X-Processing-Profile"),
+                external_references=self.headers.get_all("X-External-Reference") or [])
+            view = document_view(document)
+            status = 200 if replayed else 202
+            self._send(status, view, headers={"Location": view["links"]["self"]})
+            return status
+
+        def reprocess(self, principal: ApiPrincipal, document_id: str) -> int:
+            principal.require("documents:write")
+            payload = self._json_body(required=False)
+            profile = payload.get("processing_profile")
+            if set(payload) - {"processing_profile"} or (profile is not None and not isinstance(profile, str)):
+                raise ApiError(400, "INVALID_REQUEST", "Only processing_profile may be given")
+            document, replayed = service.reprocess(principal, document_id,
+                                                   idempotency_key=self.headers.get("Idempotency-Key"),
+                                                   correlation_id=self.headers.get("X-Correlation-Id"), profile=profile)
+            status = 200 if replayed else 202
+            self._send(status, document_view(document))
             return status
 
         def list_documents(self, principal: ApiPrincipal) -> int:
@@ -224,6 +283,7 @@ def make_handler(service: ApiService, audit: AuditLog, *, port: int, tls: bool, 
         ("POST", "/v1/documents", H.submit),
         ("GET", "/v1/documents", H.list_documents),
         ("GET", f"/v1/documents/{DOC}", H.get_document),
+        ("POST", f"/v1/documents/{DOC}/reprocess", H.reprocess),
         ("GET", f"/v1/documents/{DOC}/results", H.list_results),
         ("GET", f"/v1/documents/{DOC}/results/([1-9][0-9]{{0,5}}|latest)", H.get_result),
         ("GET", "/v1/taxonomy", H.taxonomy),

@@ -1,8 +1,10 @@
+import hashlib
 import http.client
 import json
 import socket
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ from edi_reference.application.normalization import NormalizationRegistry
 from edi_reference.application.panel_audit import AuditLog
 from edi_reference.application.panel_config import ConfigStore
 from edi_reference.application.panel_service import DocumentStore, PanelService
+from edi_reference.application.source_fetch import Grant, SourceError
 from edi_reference.domain.document_structure import BoundingBox
 from edi_reference.domain.invocation import InvocationResult
 from edi_reference.domain.ocr import OcrPage, OcrResult, OcrTextLine
@@ -189,10 +192,151 @@ def test_submission_validation(env, kwargs, status, code):
     assert (got, problem["code"]) == (status, code)
 
 
-def test_url_submission_is_not_available_in_phase_a(env):
+GRANT_URL = "https://objects.example.test/bucket/obj-1?sig=BEARER-SECRET-123"
+
+
+class FakeBroker:
+    def request_grant(self, connection, binding):
+        return Grant(GRANT_URL, "2026-10-11T00:05:00Z", {"X-Grant-Token": "BEARER-SECRET-123"})
+
+
+class FakeFetcher:
+    def __init__(self, outcome):
+        self.outcome = outcome
+
+    def fetch(self, target, grant, connection, *, max_bytes):
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
+        return self.outcome
+
+
+def reference(env, *, fetched=PDF, sha=None, idem="ref-1", key="app-a", **source):
+    env["store"].create_connection(connection_id="store-a", tenant_id="tenant-1", broker_url="https://broker.example.test/g",
+                                   origins=["https://objects.example.test"], allow_private_network=False, created_by="t") \
+        if env["store"].connection("store-a") is None else None
+    env["service"].broker, env["service"].fetcher = FakeBroker(), FakeFetcher(fetched)
+    body = {"source": {"method": "STORAGE_REFERENCE", "storage_connection_id": "store-a", "object_id": "inv/2026/1.pdf",
+                       "sha256": sha or hashlib.sha256(PDF).hexdigest(), **source}}
+    return call(env, "POST", "/v1/documents", key=key, body=body, headers={"Idempotency-Key": idem})
+
+
+def test_caller_urls_are_never_accepted(env):
     status, problem, _ = call(env, "POST", "/v1/documents", body={"source": {"method": "SIGNED_URL", "url": "https://x"}},
                               headers={"Idempotency-Key": "u1"})
-    assert status == 400 and problem["code"] == "SOURCE_METHOD_NOT_AVAILABLE"
+    assert status == 400 and problem["code"] == "CALLER_URL_NOT_ACCEPTED"
+    status, problem, _ = call(env, "POST", "/v1/documents", body={"source": {"method": "FTP"}}, headers={"Idempotency-Key": "u2"})
+    assert (status, problem["code"]) == (400, "SOURCE_METHOD_NOT_SUPPORTED")
+    status, problem, _ = call(env, "POST", "/v1/documents", raw=b"{nope", headers={"Idempotency-Key": "u3",
+                                                                                  "Content-Type": "application/json"})
+    assert (status, problem["code"]) == (400, "INVALID_JSON")
+
+
+@pytest.mark.parametrize(("source", "status", "code"), [
+    ({"object_id": "../x"}, 400, "INVALID_OBJECT_ID"),
+    ({"sha256": "abc"}, 400, "SHA256_REQUIRED"),
+    ({"url": "https://x"}, 400, "INVALID_SOURCE"),
+    ({"storage_connection_id": "store-zz"}, 404, "STORAGE_CONNECTION_NOT_FOUND"),
+])
+def test_storage_reference_validation(env, source, status, code):
+    got, problem, _ = reference(env, **source)
+    assert (got, problem["code"]) == (status, code)
+
+
+def test_storage_connection_of_another_tenant_is_not_found(env):
+    assert reference(env, key="app-c")[1]["code"] == "STORAGE_CONNECTION_NOT_FOUND"
+    env["store"].set_connection_disabled("store-a", True)
+    assert reference(env, idem="ref-2")[1]["code"] == "STORAGE_CONNECTION_NOT_FOUND"
+
+
+def test_storage_reference_is_fetched_just_in_time_and_verified(env):
+    status, doc, _ = reference(env, version_id="v7", filename="inv.pdf")
+    assert status == 202 and doc["media_type"] is None and doc["filename"] == "inv.pdf"
+    assert reference(env, version_id="v7", filename="inv.pdf")[0] == 200  # idempotent replay
+    assert reference(env)[1]["code"] == "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST"  # another object version
+    assert env["service"].run_once() is True
+    result = call(env, "GET", f"/v1/documents/{doc['document_id']}/results/latest")[1]
+    assert list(RESULT.iter_errors(result)) == []
+    assert result["status"] == "COMPLETED" and result["source"]["media_type"] == "application/pdf"
+    assert result["source"]["byte_length"] == len(PDF)
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}")[1]["media_type"] == "application/pdf"
+
+
+def test_grants_never_reach_storage_results_or_audit(env):
+    doc = reference(env)[1]
+    env["service"].run_once()
+    result = call(env, "GET", f"/v1/documents/{doc['document_id']}/results/latest")[1]
+    stored = b"".join(path.read_bytes() for path in env["tmp"].rglob("*") if path.is_file())
+    assert b"BEARER-SECRET-123" not in stored and "BEARER-SECRET-123" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(("outcome", "code"), [
+    (b"tampered bytes", "SOURCE_CHECKSUM_MISMATCH"),
+    (SourceError("SOURCE_OBJECT_MISSING", permanent=True), "SOURCE_OBJECT_MISSING"),
+])
+def test_permanent_source_failure_is_failed_safe_without_extraction(env, outcome, code):
+    doc = reference(env, fetched=outcome)[1]
+    assert env["service"].run_once() is True
+    result = call(env, "GET", f"/v1/documents/{doc['document_id']}/results/latest")[1]
+    assert list(RESULT.iter_errors(result)) == []
+    assert result["failure"] == {"code": code} and result["fields"] == []
+    assert result["source"]["media_type"] is None and result["source"]["byte_length"] is None
+
+
+def test_unsupported_fetched_content_is_failed_safe(env):
+    content = b"plain text, not a document"
+    doc = reference(env, fetched=content, sha=hashlib.sha256(content).hexdigest())[1]
+    env["service"].run_once()
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}/results/latest")[1]["failure"] == {
+        "code": "UNSUPPORTED_MEDIA_TYPE"}
+
+
+def test_transient_source_failure_is_retried(env):
+    doc = reference(env, fetched=SourceError("SOURCE_UNREACHABLE", permanent=False))[1]
+    with pytest.raises(SourceError):
+        env["service"].run_once()
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}")[1]["latest_result_version"] is None
+    env["service"].fetcher = FakeFetcher(PDF)
+    env["service"]._lease = -1
+    with sqlite3.connect(str(env["tmp"] / "api.sqlite3")) as db:
+        db.execute("UPDATE jobs SET lease_until = '2000-01-01T00:00:00.000Z'")
+    assert env["service"].run_once() is True
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}/results/latest")[1]["status"] == "COMPLETED"
+
+
+def test_reprocess_appends_a_new_version(env):
+    env["store"].set_application_profiles("app-a", ["default", "careful"], "default")
+    doc = upload(env)[1]
+    path = f"/v1/documents/{doc['document_id']}/reprocess"
+    status, problem, _ = call(env, "POST", path, headers={"Idempotency-Key": "r1"})
+    assert (status, problem["code"]) == (409, "PROCESSING_ALREADY_PENDING")
+    env["service"].run_once()
+    first = call(env, "GET", f"/v1/documents/{doc['document_id']}/results/1")[1]
+
+    assert call(env, "POST", path, body={"processing_profile": "fast"}, headers={"Idempotency-Key": "r1"})[1]["code"] == \
+        "PROFILE_NOT_ALLOWED"
+    status, view, _ = call(env, "POST", path, body={"processing_profile": "careful"}, headers={"Idempotency-Key": "r1"})
+    assert status == 202 and view["status"] == "ACCEPTED"
+    assert call(env, "POST", path, body={"processing_profile": "careful"}, headers={"Idempotency-Key": "r1"})[0] == 200
+    assert call(env, "POST", path, headers={"Idempotency-Key": "r1"})[1]["code"] == \
+        "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST"
+    env["service"].run_once()
+
+    second = call(env, "GET", f"/v1/documents/{doc['document_id']}/results/2")[1]
+    assert list(RESULT.iter_errors(second)) == []
+    assert second["provenance"]["processing_profile"]["id"] == "careful"
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}/results/1")[1] == first
+    assert call(env, "GET", f"/v1/documents/{doc['document_id']}")[1]["latest_result_version"] == 2
+
+
+def test_reprocess_is_limited_to_the_owning_application(env):
+    doc = upload(env)[1]
+    env["service"].run_once()
+    _, tenant_key = issue_key(env["store"], "app-b", ["documents:write", "documents:read:tenant"], created_by="t")
+    env["keys"]["tenant-b"] = tenant_key
+    path = f"/v1/documents/{doc['document_id']}/reprocess"
+    assert call(env, "POST", path, key="tenant-b", headers={"Idempotency-Key": "r1"})[1]["code"] == "DOCUMENT_NOT_FOUND"
+    assert call(env, "POST", path, key="app-c", headers={"Idempotency-Key": "r1"})[1]["code"] == "DOCUMENT_NOT_FOUND"
+    assert call(env, "POST", path, body={"other": 1}, headers={"Idempotency-Key": "r1"})[1]["code"] == "INVALID_REQUEST"
 
 
 def test_documents_are_visible_only_to_their_application(env):
@@ -292,19 +436,32 @@ def test_discovery_endpoints(env):
 def test_requests_are_audited_without_secrets(env):
     upload(env)
     call(env, "GET", "/v1/documents", key="garbage")
-    text = (env["tmp"] / "audit.jsonl").read_text(encoding="utf-8")
+    # The handler audits in `finally`, after the response is sent: wait for the record.
+    deadline = time.monotonic() + 5
+    while '"outcome": "401"' not in (text := (env["tmp"] / "audit.jsonl").read_text(encoding="utf-8")) \
+            and time.monotonic() < deadline:
+        time.sleep(0.02)
     assert '"action": "api.post"' in text and '"outcome": "401"' in text
     assert all(token.split(".")[1] not in text for token in env["keys"].values())
 
 
 def test_design_examples_validate_against_the_contracts():
     examples = ROOT / "docs/api/examples"
-    for name in ("result-completed.json", "result-failed-safe.json"):
+    for name in ("result-completed.json", "result-failed-safe.json", "result-failed-safe-source.json"):
         assert list(RESULT.iter_errors(json.loads((examples / name).read_text(encoding="utf-8")))) == []
+    # null source facts are allowed only for a document that was never fetched, i.e. FAILED_SAFE
+    completed = json.loads((examples / "result-completed.json").read_text(encoding="utf-8"))
+    completed["source"].update(media_type=None, byte_length=None)
+    assert list(RESULT.iter_errors(completed)) != []
     spec = json.loads((CONTRACTS / "openapi-v1.json").read_text(encoding="utf-8"))
     registry = Registry().with_resource("urn:openapi", Resource.from_contents(
         {"$schema": "https://json-schema.org/draft/2020-12/schema", "components": spec["components"]}))
     exchanges = json.loads((examples / "http-exchanges.json").read_text(encoding="utf-8"))
+    reference = {"source": {"method": "STORAGE_REFERENCE", "storage_connection_id": "store-a", "object_id": "inv/1.pdf",
+                            "sha256": "0" * 64}}
+    caller_url = {"source": {"method": "SIGNED_URL", "url": "https://x"}}
+    submission = Draft202012Validator({"$ref": "urn:openapi#/components/schemas/StorageReferenceSubmission"}, registry=registry)
+    assert list(submission.iter_errors(reference)) == [] and list(submission.iter_errors(caller_url)) != []
     for schema, body in (("Document", exchanges["submit_upload"]["response"]["body"]),
                          ("Problem", exchanges["idempotency_conflict"]["response"]["body"]),
                          ("WebhookEvent", exchanges["webhook"]["body"])):

@@ -129,13 +129,13 @@ if [ "$CHECK" -eq 1 ]; then
     echo "bootstrap.sh: running test suite"
     "$VENV/bin/python" -m pytest -q
     echo "bootstrap.sh: host probe"
-    "$VENV/bin/edi" doctor
+    "$VENV/bin/tlkdoc" doctor
 fi
 
 cat <<'EOF'
 bootstrap.sh: done.
 Next steps:
-  source .venv/bin/activate     # or call .venv/bin/edi directly
+  source .venv/bin/activate     # or call .venv/bin/tlkdoc directly
   tlkdoc doctor
   tlkdoc config --wizard           # optional one-time defaults
 EOF

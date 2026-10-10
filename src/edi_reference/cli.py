@@ -1200,7 +1200,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "model":
         args.command = "models"
 
-    if args.command in ("serve-panel", "panel-user", "app"):
+    if args.command in ("serve-panel", "panel-user", "app", "storage"):
         return run_panel_command(args)
 
     if args.command == "api":
