@@ -32,8 +32,10 @@
       "required": ["sha256", "media_type", "byte_length", "pages_total", "pages_processed"],
       "properties": {
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "media_type": {"enum": ["application/pdf", "image/png", "image/jpeg", "image/tiff"]},
-        "byte_length": {"type": "integer", "minimum": 1},
+        "media_type": {"enum": ["application/pdf", "image/png", "image/jpeg", "image/tiff", null],
+                       "description": "null only on FAILED_SAFE when a referenced document was never fetched."},
+        "byte_length": {"type": ["integer", "null"], "minimum": 1,
+                        "description": "null only on FAILED_SAFE when a referenced document was never fetched."},
         "pages_total": {"type": ["integer", "null"], "minimum": 1},
         "pages_processed": {"type": "integer", "minimum": 0},
         "filename": {"type": ["string", "null"], "maxLength": 200},
@@ -127,7 +129,8 @@
     {"if": {"properties": {"status": {"const": "FAILED_SAFE"}}},
      "then": {"properties": {"failure": {"type": "object"},
                              "classification": {"properties": {"document_type": {"const": "UNKNOWN"}}}}},
-     "else": {"properties": {"failure": {"type": "null"}}}}
+     "else": {"properties": {"failure": {"type": "null"},
+                             "source": {"properties": {"media_type": {"type": "string"}, "byte_length": {"type": "integer"}}}}}}
   ],
   "$defs": {
     "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$"},

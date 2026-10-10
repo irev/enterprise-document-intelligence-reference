@@ -29,6 +29,7 @@ from edi_reference.adapters.lmstudio_control import LmStudioControl, LmStudioErr
 from edi_reference.adapters.normalizers import reference_normalizers
 from edi_reference.adapters.openai_compatible import OpenAICompatibleInvoker
 from edi_reference.adapters.runtime_ocr import RuntimeOcrEngine, model_dir_digest
+from edi_reference.adapters.restricted_http import FileSecretStore, HttpGrantBroker, HttpObjectFetcher, RestrictedHttps
 from edi_reference.adapters.sqlite_api_store import SqliteApiStore
 from edi_reference.application.api_service import SCOPES, ApiService, issue_key
 from edi_reference.application.normalization import NormalizationRegistry
@@ -107,6 +108,8 @@ class Panel:
             normalizers={"money": ("money.id-ID.IDR", "1"), "date": ("date.iso-8601", "1"),
                          "identifier": ("identifier.trimmed", "1")},
             on_event=lambda actor, action, **kw: self.audit.record(actor, action, **kw),
+            broker=HttpGrantBroker(RestrictedHttps(), FileSecretStore(state / "storage-secrets").load),
+            fetcher=HttpObjectFetcher(RestrictedHttps()),
         )
         self.api_server: ApiHTTPServer | None = None
 

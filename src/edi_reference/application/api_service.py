@@ -24,6 +24,16 @@ from typing import Callable, Protocol
 from edi_reference.application.extraction_registry import registry_from_dict
 from edi_reference.application.normalization import NormalizationRegistry
 from edi_reference.application.panel_service import PanelService, config_versions, detect_media_type
+from edi_reference.application.source_fetch import (
+    GrantBinding,
+    GrantBroker,
+    ObjectFetcher,
+    Origin,
+    SourceError,
+    SourceReference,
+    StorageConnection,
+    fetch_verified,
+)
 from edi_reference.domain.classification import UNKNOWN_DOCUMENT_TYPE
 from edi_reference.domain.normalization import NormalizationError
 
@@ -74,11 +84,21 @@ class ApiStore(Protocol):
     def key(self, key_id: str) -> dict | None: ...
     def touch_key(self, key_id: str) -> None: ...
     def add_key(self, *, key_id: str, application_id: str, secret_sha256: str, scopes: list[str], created_by: str) -> None: ...
-    def submit(self, document: dict): ...
+    def submit(self, document: dict, source: dict | None = None): ...
     def queued_count(self, tenant_id: str, application_id: str) -> int: ...
     def document(self, document_id: str) -> dict | None: ...
     def claim(self, *, lease_seconds: int) -> dict | None: ...
     def complete(self, job_id: str, document_id: str, body: dict) -> int: ...
+    def connection(self, connection_id: str) -> dict | None: ...
+    def source(self, document_id: str) -> dict | None: ...
+    def mark_fetched(self, document_id: str, *, media_type: str, byte_length: int) -> None: ...
+    def reprocess(self, document_id: str, *, idempotency_key: str, fingerprint: str, profile: str) -> tuple[str, bool]: ...
+
+
+def storage_connection(row: dict) -> StorageConnection:
+    return StorageConnection(row["connection_id"], row["tenant_id"], row["broker_url"],
+                             tuple(Origin.parse(origin) for origin in row["origins"]),
+                             allow_private_network=row["allow_private_network"], disabled=row["disabled"])
 
 
 def issue_key(store: ApiStore, application_id: str, scopes: list[str], *, created_by: str) -> tuple[str, str]:
@@ -116,8 +136,10 @@ class RateLimiter:
 class ApiService:
     def __init__(self, *, store: ApiStore, panel: PanelService, registry: NormalizationRegistry,
                  normalizers: dict[str, tuple[str, str]], on_event: Callable[..., object] = lambda *a, **k: None,
-                 lease_seconds: int = 900, poll_seconds: float = 1.0) -> None:
+                 lease_seconds: int = 900, poll_seconds: float = 1.0, broker: GrantBroker | None = None,
+                 fetcher: ObjectFetcher | None = None) -> None:
         self.store, self.panel = store, panel
+        self.broker, self.fetcher = broker, fetcher
         self._registry, self._normalizers = registry, normalizers
         self._on_event = on_event
         self._lease, self._poll = lease_seconds, poll_seconds
@@ -152,9 +174,10 @@ class ApiService:
         return document  # type: ignore[return-value]
 
     # ------------------------------------------------------------ submission
-    def submit_upload(self, principal: ApiPrincipal, content: bytes, *, idempotency_key: str | None,
-                      correlation_id: str | None, filename: str | None, profile: str | None,
-                      external_references: list[str]) -> tuple[dict, bool]:
+    @staticmethod
+    def _check_request(principal: ApiPrincipal, idempotency_key: str | None, correlation_id: str | None,
+                       profile: str | None, default_profile: str) -> str:
+        """Checks shared by every write; returns the processing profile to use."""
         principal.require("documents:write")
         if not idempotency_key:
             raise ApiError(400, "IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header required")
@@ -162,10 +185,17 @@ class ApiService:
             raise ApiError(400, "INVALID_IDEMPOTENCY_KEY", "Invalid Idempotency-Key")
         if correlation_id is not None and not ID_PATTERN.fullmatch(correlation_id):
             raise ApiError(400, "INVALID_CORRELATION_ID", "Invalid X-Correlation-Id")
-        app = principal.application
-        profile = profile or app["default_profile"]
-        if profile not in app["allowed_profiles"]:
+        profile = profile or default_profile
+        if profile not in principal.application["allowed_profiles"]:
             raise ApiError(400, "PROFILE_NOT_ALLOWED", "Processing profile not allowed")
+        return profile
+
+    def _check_queue(self, principal: ApiPrincipal) -> None:
+        if self.store.queued_count(principal.tenant_id, principal.application_id) >= int(principal.application["max_queued"]):
+            raise ApiError(429, "QUEUE_LIMIT_REACHED", "Too many documents waiting", retry_after=30)
+
+    @staticmethod
+    def _references(external_references: list[str]) -> dict[str, str]:
         references = {}
         for item in external_references[:11]:
             match = REFERENCE_PATTERN.fullmatch(item)
@@ -174,6 +204,29 @@ class ApiService:
             references[match.group(1)] = match.group(2)
         if len(references) > 10:
             raise ApiError(400, "TOO_MANY_EXTERNAL_REFERENCES", "At most 10 external references")
+        return references
+
+    @staticmethod
+    def _filename(filename: str | None) -> str | None:
+        return filename.replace("\\", "/").rsplit("/", 1)[-1][:200] if filename else None
+
+    def _submit(self, principal: ApiPrincipal, document: dict, source: dict | None = None) -> tuple[dict, bool]:
+        try:
+            submission = self.store.submit(document, source)
+        except ValueError as exc:
+            if str(exc) == "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST":
+                raise ApiError(409, str(exc), "Idempotency key reused with a different request") from None
+            raise
+        if not submission.replayed:
+            self._wake.set()
+        return submission.document, submission.replayed
+
+    def submit_upload(self, principal: ApiPrincipal, content: bytes, *, idempotency_key: str | None,
+                      correlation_id: str | None, filename: str | None, profile: str | None,
+                      external_references: list[str]) -> tuple[dict, bool]:
+        app = principal.application
+        profile = self._check_request(principal, idempotency_key, correlation_id, profile, app["default_profile"])
+        references = self._references(external_references)
         if not content:
             raise ApiError(400, "EMPTY_DOCUMENT", "Document body is empty")
         if len(content) > min(int(app["max_bytes"]), MAX_BYTES_CEILING):
@@ -185,26 +238,72 @@ class ApiService:
         sha256 = hashlib.sha256(content).hexdigest()
         fingerprint = hashlib.sha256(json.dumps({"method": "UPLOAD", "sha256": sha256, "profile": profile},
                                                 sort_keys=True).encode()).hexdigest()
-        if self.store.queued_count(principal.tenant_id, principal.application_id) >= int(app["max_queued"]):
-            raise ApiError(429, "QUEUE_LIMIT_REACHED", "Too many documents waiting", retry_after=30)
-        name = filename.replace("\\", "/").rsplit("/", 1)[-1][:200] if filename else None
+        self._check_queue(principal)
+        name = self._filename(filename)
         # Content-addressed blob; the API document record keeps tenant/application ownership.
         self.panel.store.put(content, name or "document", uploaded_by=f"app:{principal.application_id}")
+        return self._submit(principal, {
+            "document_id": new_id("doc"), "tenant_id": principal.tenant_id,
+            "application_id": principal.application_id, "idempotency_key": idempotency_key,
+            "fingerprint": fingerprint, "correlation_id": correlation_id or new_id("corr"), "sha256": sha256,
+            "media_type": media_type, "byte_length": len(content), "filename": name,
+            "external_references": references, "profile": profile,
+        })
+
+    def submit_reference(self, principal: ApiPrincipal, source: dict, *, idempotency_key: str | None,
+                         correlation_id: str | None, filename: str | None, profile: str | None,
+                         external_references: list[str]) -> tuple[dict, bool]:
+        """Accept a reference to an object in tenant-owned storage (ADR-0001); the worker fetches it later."""
+        app = principal.application
+        profile = self._check_request(principal, idempotency_key, correlation_id, profile, app["default_profile"])
+        references = self._references(external_references)
         try:
-            submission = self.store.submit({
-                "document_id": new_id("doc"), "tenant_id": principal.tenant_id,
-                "application_id": principal.application_id, "idempotency_key": idempotency_key,
-                "fingerprint": fingerprint, "correlation_id": correlation_id or new_id("corr"), "sha256": sha256,
-                "media_type": media_type, "byte_length": len(content), "filename": name,
-                "external_references": references, "profile": profile,
-            })
+            reference = SourceReference(source.get("storage_connection_id"), source.get("object_id"),  # type: ignore[arg-type]
+                                        source.get("sha256"), source.get("version_id"))  # type: ignore[arg-type]
+        except (ValueError, TypeError) as exc:
+            code = str(exc) if isinstance(exc, ValueError) else "INVALID_SOURCE"
+            raise ApiError(400, code, "Invalid storage reference") from None
+        row = self.store.connection(reference.connection_id)
+        if row is None or row["tenant_id"] != principal.tenant_id or row["disabled"]:
+            # Other tenants' connections are indistinguishable from missing ones.
+            raise ApiError(404, "STORAGE_CONNECTION_NOT_FOUND", "Storage connection not found")
+        fingerprint = hashlib.sha256(json.dumps({
+            "method": "STORAGE_REFERENCE", "connection": reference.connection_id, "object": reference.object_id,
+            "version": reference.version_id, "sha256": reference.sha256, "profile": profile,
+        }, sort_keys=True).encode()).hexdigest()
+        self._check_queue(principal)
+        # Bytes are unknown until the worker fetches them: media type and length are empty until then.
+        return self._submit(principal, {
+            "document_id": new_id("doc"), "tenant_id": principal.tenant_id,
+            "application_id": principal.application_id, "idempotency_key": idempotency_key,
+            "fingerprint": fingerprint, "correlation_id": correlation_id or new_id("corr"), "sha256": reference.sha256,
+            "media_type": "", "byte_length": 0, "filename": self._filename(filename),
+            "external_references": references, "profile": profile,
+        }, {"connection_id": reference.connection_id, "object_id": reference.object_id,
+            "version_id": reference.version_id})
+
+    def reprocess(self, principal: ApiPrincipal, document_id: str, *, idempotency_key: str | None,
+                  correlation_id: str | None, profile: str | None) -> tuple[dict, bool]:
+        """Queue a new processing run; it appends a result version and never alters earlier ones."""
+        principal.require("documents:write")
+        document = self.owned_document(principal, document_id)
+        if document["application_id"] != principal.application_id:
+            # Tenant-wide read access does not grant writes on another application's documents.
+            raise ApiError(404, "DOCUMENT_NOT_FOUND", "Document not found")
+        profile = self._check_request(principal, idempotency_key, correlation_id, profile, document["profile"])
+        fingerprint = hashlib.sha256(json.dumps({"method": "REPROCESS", "document_id": document_id, "profile": profile},
+                                                sort_keys=True).encode()).hexdigest()
+        self._check_queue(principal)
+        try:
+            _, replayed = self.store.reprocess(document_id, idempotency_key=idempotency_key,  # type: ignore[arg-type]
+                                               fingerprint=fingerprint, profile=profile)
         except ValueError as exc:
-            if str(exc) == "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST":
-                raise ApiError(409, str(exc), "Idempotency key reused with a different request") from None
+            if str(exc) in ("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST", "PROCESSING_ALREADY_PENDING"):
+                raise ApiError(409, str(exc), str(exc)) from None
             raise
-        if not submission.replayed:
+        if not replayed:
             self._wake.set()
-        return submission.document, submission.replayed
+        return self.store.document(document_id) or document, replayed
 
     # ------------------------------------------------------------ worker
     def start(self) -> None:
@@ -231,23 +330,57 @@ class ApiService:
             return False
         document = self.store.document(job["document_id"])
         assert document is not None
+        if job.get("profile"):  # a reprocess run may use another allowed profile
+            document = dict(document, profile=job["profile"])
         snap = self.panel.snapshot()
         if job["attempts"] > MAX_ATTEMPTS:
             body = self.failed_safe(document, snap, "PROCESSING_ATTEMPTS_EXHAUSTED")
         else:
-            # A model server that is down raises here; the job lease expires and the
-            # job is retried, up to MAX_ATTEMPTS. There is no silent rules-only fallback.
-            self.panel.ensure_model(snap["pipeline"]["llm"]["model"])
             try:
-                raw = self.panel.process_document(document["sha256"], snap, use_llm=True)
-                body = self.to_result(document, raw, snap)
-            except Exception:  # noqa: BLE001 - a result is still recorded, fail-safe
-                traceback.print_exc()
-                body = self.failed_safe(document, snap, "RESULT_MAPPING_FAILED")
+                document = self._fetch_source(document)
+            except SourceError as exc:
+                if not exc.permanent:
+                    raise  # the job lease expires and the fetch is retried, up to MAX_ATTEMPTS
+                body = self.failed_safe(document, snap, exc.code)
+            else:
+                # A model server that is down raises here; the job lease expires and the
+                # job is retried, up to MAX_ATTEMPTS. There is no silent rules-only fallback.
+                self.panel.ensure_model(snap["pipeline"]["llm"]["model"])
+                try:
+                    raw = self.panel.process_document(document["sha256"], snap, use_llm=True)
+                    body = self.to_result(document, raw, snap)
+                except Exception:  # noqa: BLE001 - a result is still recorded, fail-safe
+                    traceback.print_exc()
+                    body = self.failed_safe(document, snap, "RESULT_MAPPING_FAILED")
         version = self.store.complete(job["job_id"], document["document_id"], body)
         self._on_event(f"app:{document['application_id']}", "api.document.processed", target=document["document_id"],
                        outcome=body["status"], result_version=version)
         return True
+
+    def _fetch_source(self, document: dict) -> dict:
+        """Fetch a storage-referenced document once, just in time; uploads pass through unchanged."""
+        source = self.store.source(document["document_id"])
+        if source is None or source["fetched_at"] is not None:
+            return document
+        if self.broker is None or self.fetcher is None:
+            raise SourceError("SOURCE_FETCH_NOT_CONFIGURED", permanent=False)
+        row = self.store.connection(source["connection_id"])
+        if row is None:
+            raise SourceError("STORAGE_CONNECTION_NOT_FOUND", permanent=True)
+        application = self.store.application(document["application_id"]) or {}
+        content = fetch_verified(
+            SourceReference(source["connection_id"], source["object_id"], document["sha256"], source["version_id"]),
+            GrantBinding(document["tenant_id"], source["connection_id"], document["document_id"], source["object_id"],
+                         source["version_id"]),
+            storage_connection(row), broker=self.broker, fetcher=self.fetcher,
+            max_bytes=min(int(application.get("max_bytes", MAX_BYTES_CEILING)), MAX_BYTES_CEILING))
+        try:
+            media_type = detect_media_type(content)
+        except ValueError:
+            raise SourceError("UNSUPPORTED_MEDIA_TYPE", permanent=True) from None
+        self.panel.store.put(content, document["filename"] or "document", uploaded_by=f"app:{document['application_id']}")
+        self.store.mark_fetched(document["document_id"], media_type=media_type, byte_length=len(content))
+        return dict(document, media_type=media_type, byte_length=len(content))
 
     # ------------------------------------------------------------ result v1
     def _base(self, document: dict, snap: dict, status: str) -> dict:
@@ -259,8 +392,9 @@ class ApiService:
             "application_id": document["application_id"], "processing_run_id": new_id("run"),
             "correlation_id": document["correlation_id"], "status": status, "failure": None,
             "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-            "source": {"sha256": document["sha256"], "media_type": document["media_type"],
-                       "byte_length": document["byte_length"], "pages_total": None, "pages_processed": 0,
+            # media_type/byte_length are null when a referenced document failed before it was fetched
+            "source": {"sha256": document["sha256"], "media_type": document["media_type"] or None,
+                       "byte_length": document["byte_length"] or None, "pages_total": None, "pages_processed": 0,
                        "filename": document["filename"], "external_references": document["external_references"]},
             "provenance": {
                 "processing_profile": {"id": document["profile"], "version": 1},
