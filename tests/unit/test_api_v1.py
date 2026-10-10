@@ -442,12 +442,21 @@ def test_requests_are_audited_without_secrets(env):
 
 def test_design_examples_validate_against_the_contracts():
     examples = ROOT / "docs/api/examples"
-    for name in ("result-completed.json", "result-failed-safe.json"):
+    for name in ("result-completed.json", "result-failed-safe.json", "result-failed-safe-source.json"):
         assert list(RESULT.iter_errors(json.loads((examples / name).read_text(encoding="utf-8")))) == []
+    # null source facts are allowed only for a document that was never fetched, i.e. FAILED_SAFE
+    completed = json.loads((examples / "result-completed.json").read_text(encoding="utf-8"))
+    completed["source"].update(media_type=None, byte_length=None)
+    assert list(RESULT.iter_errors(completed)) != []
     spec = json.loads((CONTRACTS / "openapi-v1.json").read_text(encoding="utf-8"))
     registry = Registry().with_resource("urn:openapi", Resource.from_contents(
         {"$schema": "https://json-schema.org/draft/2020-12/schema", "components": spec["components"]}))
     exchanges = json.loads((examples / "http-exchanges.json").read_text(encoding="utf-8"))
+    reference = {"source": {"method": "STORAGE_REFERENCE", "storage_connection_id": "store-a", "object_id": "inv/1.pdf",
+                            "sha256": "0" * 64}}
+    caller_url = {"source": {"method": "SIGNED_URL", "url": "https://x"}}
+    submission = Draft202012Validator({"$ref": "urn:openapi#/components/schemas/StorageReferenceSubmission"}, registry=registry)
+    assert list(submission.iter_errors(reference)) == [] and list(submission.iter_errors(caller_url)) != []
     for schema, body in (("Document", exchanges["submit_upload"]["response"]["body"]),
                          ("Problem", exchanges["idempotency_conflict"]["response"]["body"]),
                          ("WebhookEvent", exchanges["webhook"]["body"])):

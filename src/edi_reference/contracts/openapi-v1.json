@@ -17,7 +17,7 @@
         "tags": ["documents"],
         "operationId": "submitDocument",
         "summary": "Submit a document by upload or by URL",
-        "description": "Upload: send the document bytes as the body with its media type. URL: send application/json with a source object; the host must be on the administrator allow-list. Idempotent per (application, Idempotency-Key).",
+        "description": "Upload: send the document bytes as the body with its media type. Storage reference (ADR-0001): send application/json with a STORAGE_REFERENCE source naming a storage connection of the caller's tenant, an opaque object id and the required sha256; the service fetches the object just in time through the tenant's grant broker and verifies the digest. Caller-supplied URLs are rejected with CALLER_URL_NOT_ACCEPTED. Idempotent per (application, Idempotency-Key).",
         "x-required-scope": "documents:write",
         "parameters": [
           {"$ref": "#/components/parameters/IdempotencyKey"},
@@ -34,7 +34,7 @@
             "image/png": {"schema": {"type": "string", "contentMediaType": "image/png"}},
             "image/jpeg": {"schema": {"type": "string", "contentMediaType": "image/jpeg"}},
             "image/tiff": {"schema": {"type": "string", "contentMediaType": "image/tiff"}},
-            "application/json": {"schema": {"$ref": "#/components/schemas/UrlSubmission"}}
+            "application/json": {"schema": {"$ref": "#/components/schemas/StorageReferenceSubmission"}}
           }
         },
         "responses": {
@@ -45,6 +45,7 @@
           "400": {"$ref": "#/components/responses/Problem"},
           "401": {"$ref": "#/components/responses/Problem"},
           "403": {"$ref": "#/components/responses/Problem"},
+          "404": {"$ref": "#/components/responses/Problem"},
           "409": {"$ref": "#/components/responses/Problem"},
           "413": {"$ref": "#/components/responses/Problem"},
           "415": {"$ref": "#/components/responses/Problem"},
@@ -220,15 +221,19 @@
       "Id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$"},
       "DocumentStatus": {"enum": ["RECEIVED", "ACCEPTED", "PROCESSING", "COMPLETED", "FAILED_SAFE", "REJECTED", "UNSUPPORTED"]},
       "EventType": {"enum": ["document.completed", "document.failed_safe", "document.rejected"]},
-      "UrlSubmission": {
+      "StorageReferenceSubmission": {
         "type": "object", "additionalProperties": false, "required": ["source"],
+        "description": "Errors: CALLER_URL_NOT_ACCEPTED, SOURCE_METHOD_NOT_SUPPORTED, INVALID_SOURCE, INVALID_STORAGE_CONNECTION_ID, INVALID_OBJECT_ID, SHA256_REQUIRED, INVALID_VERSION_ID (400); STORAGE_CONNECTION_NOT_FOUND (404). Fetch failures after acceptance end in a FAILED_SAFE result whose failure.code is one of SOURCE_ACCESS_DENIED, SOURCE_OBJECT_MISSING, SOURCE_GRANT_EXPIRED, SOURCE_HOST_FORBIDDEN, SOURCE_REDIRECT_REFUSED, SOURCE_TOO_LARGE, SOURCE_CHECKSUM_MISMATCH, SOURCE_BROKER_INVALID_RESPONSE, UNSUPPORTED_MEDIA_TYPE or PROCESSING_ATTEMPTS_EXHAUSTED.",
         "properties": {
           "source": {
-            "type": "object", "additionalProperties": false, "required": ["method", "url"],
+            "type": "object", "additionalProperties": false, "required": ["method", "storage_connection_id", "object_id", "sha256"],
             "properties": {
-              "method": {"const": "SIGNED_URL"},
-              "url": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 8192},
-              "expected_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "method": {"const": "STORAGE_REFERENCE"},
+              "storage_connection_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}$"},
+              "object_id": {"type": "string", "pattern": "^[A-Za-z0-9._:/=+-]{1,512}$",
+                            "description": "Opaque to the service; never used as a URL or a path."},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "version_id": {"type": "string", "pattern": "^[A-Za-z0-9._:=+-]{1,256}$"},
               "filename": {"type": "string", "maxLength": 200}
             }
           }
