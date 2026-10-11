@@ -1,22 +1,21 @@
 {
   "profile_id": "title-rules-id-en",
-  "version": "2",
+  "version": "3",
   "taxonomy_version": "business-documents-2",
-  "heading_blocks": 8,
+  "heading_blocks": 20,
   "match_policy": "FIRST_RULE",
   "rules": [
+    {"pattern": "(?<!disampaikan )(permintaan|permohonan|perintah|instruksi)\\s*pembayaran|(?<![/\\w])spp\\b(?!\\s*/)", "document_type": "PAYMENT_REQUEST"},
     {"pattern": "faktur\\s*pajak", "document_type": "TAX_INVOICE"},
-    {"pattern": "pesanan", "document_type": "ORDER_LETTER"},
-    {"pattern": "(permintaan|perintah|instruksi)\\s*pembayaran|\\bspp\\b", "document_type": "PAYMENT_REQUEST"},
+    {"pattern": "kw?uitansi|kwitansi|\\breceipt\\b", "document_type": "RECEIPT"},
+    {"pattern": "\\binvoice\\b", "document_type": "INVOICE"},
+    {"pattern": "(?<!dengan )(?<!sesuai )(?<!berdasarkan )(?<!atas )(?<!dalam )(?<!terhadap )(surat|kontrak)\\s*pesanan|(?<!dengan )(?<!sesuai )(?<!berdasarkan )(?<!atas )(?<!dalam )(?<!terhadap )(?<!kontrak )(?<!surat )\\bpesanan\\b", "document_type": "ORDER_LETTER"},
+    {"pattern": "purchase\\s*order", "document_type": "PURCHASE_ORDER"},
     {"pattern": "berita\\s*acara\\s*pemeriksaan\\s*pekerjaan", "document_type": "WORK_INSPECTION_REPORT"},
     {"pattern": "berita\\s*acara\\s*serah\\s*terima", "document_type": "HANDOVER_REPORT"},
     {"pattern": "berita\\s*acara\\s*pembayaran", "document_type": "PAYMENT_REPORT"},
     {"pattern": "berita\\s*acara\\s*(penggunaan|pemakaian|utilitas)", "document_type": "SERVICE_USAGE_REPORT"},
-    {"pattern": "berita\\s*acara", "document_type": "ACCEPTANCE_REPORT"},
-    {"pattern": "kw?uitansi|kwitansi", "document_type": "RECEIPT"},
-    {"pattern": "purchase\\s*order", "document_type": "PURCHASE_ORDER"},
-    {"pattern": "kontrak|perjanjian", "document_type": "CONTRACT"},
-    {"pattern": "\\breceipt\\b", "document_type": "RECEIPT"},
-    {"pattern": "\\binvoice\\b|tagihan", "document_type": "INVOICE"}
+    {"pattern": "berita\\s*acara(?!\\s*(perubahan|kesepakatan))", "document_type": "ACCEPTANCE_REPORT"},
+    {"pattern": "(?<!dengan )(?<!sesuai )(?<!berdasarkan )(?<!atas )(?<!dalam )(?<!terhadap )\\b(kontrak|perjanjian)\\b", "document_type": "CONTRACT"}
   ]
 }

@@ -42,6 +42,8 @@ from edi_reference.application.runtime_bootstrap import (
     resolve_runtime,
 )
 from edi_reference.application.runtime_installer import read_install_state, runtime_python
+from edi_reference.eval_cli import add_parsers as add_eval_parsers
+from edi_reference.eval_cli import run as run_eval_command
 from edi_reference.panel_cli import add_parsers as add_panel_parsers
 from edi_reference.panel_cli import run as run_panel_command
 from edi_reference.application.runtime_requirements import provider_runtime_requirement
@@ -1191,6 +1193,7 @@ def _parser(config: LocalConfig | None = None) -> argparse.ArgumentParser:
     web.add_argument("--port", type=int, default=cfg.web_port or 4099, help="listen port (default 4099)")
     web.add_argument("--runtime-root", type=Path, default=default_runtime_root)
     add_panel_parsers(commands, runtime_root=default_runtime_root)
+    add_eval_parsers(commands, runtime_root=default_runtime_root)
     return parser
 
 
@@ -1202,6 +1205,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command in ("serve-panel", "panel-user", "app", "storage"):
         return run_panel_command(args)
+    if args.command == "eval":
+        return run_eval_command(args)
 
     if args.command == "api":
         text = args.request if args.request is not None else sys.stdin.read()

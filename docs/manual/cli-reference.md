@@ -383,6 +383,30 @@ Servers pages).
 Verify routes answer `403 RESERVED_OPERATION`. Prints the listening URL; stop with
 Ctrl+C. Details: [Web control panel](web-panel.md).
 
+## `tlkdoc eval` (offline evaluation)
+
+Measures classification and field extraction against labelled documents. Private documents, manifests,
+predictions and reports stay outside the repository; the defaults live under `.edi/eval/`, which is git-ignored.
+
+```text
+tlkdoc eval init <samples-folder> [--field-packages 10]   # draft manifest from file names (<package>_<label>.pdf)
+tlkdoc eval review-export                                  # CSV sheet for people to verify labels and values
+tlkdoc eval review-import .edi/eval/review.csv             # write the verified sheet back
+tlkdoc eval run --mode rules --no-llm [--split dev]        # run the panel pipeline; resumable
+tlkdoc eval score --predictions .edi/eval/predictions-rules-nollm.jsonl [--split holdout]
+tlkdoc eval sync-fields [--rename OLD=NEW]                 # align field slots after a registry change
+```
+
+- File-name labels are drafts. Ambiguous labels are `needs_review`. Only `verified` labels are scored, unless
+  `--include-draft` is given, and then the report says it is not a measurement.
+- Documents are split into `dev` and `holdout` per package, so one package never sits in both. Tune rules on `dev`
+  and measure `holdout` once.
+- The report gives accuracy and per-class precision/recall. It also counts *wrong-not-UNKNOWN*, a confident wrong
+  category, which is the costly error. For fields it counts correct, wrong, missed and false-present values,
+  compared in canonical form.
+- `run` also stores every result in the panel state, so `tlkdoc serve-panel --state-dir .edi/eval/state` shows
+  progress live. OCR results are cached, so re-running classification after a rule change takes seconds.
+
 ## Not available yet (planned)
 
 The following appear in `../REQUIREMENTS-ANALYSIS.md` as gaps — do not expect them from

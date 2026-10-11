@@ -57,10 +57,10 @@ def test_registry_validation(change, code):
 def test_schema_selection_and_policies():
     registry = registry_from_dict(REGISTRY)
     invoice = registry.select("INVOICE")
-    assert invoice.source == "CATEGORY" and invoice.reference == {"id": "invoice-header", "version": "1"}
+    assert invoice.source == "CATEGORY" and invoice.reference == {"id": "invoice-header", "version": "2"}
     assert "contract value" in registry.select("CONTRACT").descriptions["contract_amount"]
     assert registry.select("UNKNOWN").source == "COMMON"
-    assert registry.select("NOT_CONFIGURED").reference == {"id": "common-header", "version": "1"}
+    assert registry.select("NOT_CONFIGURED").reference == {"id": "common-header", "version": "2"}
     strict = registry_from_dict(mutate(lambda d: d.update(unknown_policy="NONE", missing_category_policy="NONE")))
     assert strict.select("UNKNOWN").schema is None and strict.select("NOT_CONFIGURED").source == "NONE"
 
@@ -151,7 +151,7 @@ def test_category_schema_drives_extraction_and_normalization(api):
     service, store = api
     result = process(service, store)
     assert list(RESULT.iter_errors(result)) == []
-    assert result["provenance"]["extraction_schema"] == {"id": "invoice-header", "version": "1", "selection": "CATEGORY"}
+    assert result["provenance"]["extraction_schema"] == {"id": "invoice-header", "version": "2", "selection": "CATEGORY"}
     assert result["provenance"]["configuration"]["extraction_registry"] == 1
     names = [f["name"] for f in result["fields"]]
     assert names[:4] == ["document_number", "document_date", "issuer_name", "recipient_name"] and "due_date" in names
@@ -192,3 +192,16 @@ def test_schema_discovery_is_per_category(api):
     assert invoice["schema_id"] == "invoice-header"
     assert {"name": "due_date", "value_type": "date", "normalizer": {"id": "date.iso-8601", "version": "1"}} in invoice["fields"]
     assert service.field_schema("TAX_INVOICE")["schema_id"] == "tax-invoice-header"
+
+
+def test_seed_v2_resolves_ambiguous_fields():
+    registry = registry_from_dict(REGISTRY)
+    invoice = [f.field_name for f in registry.select("INVOICE").schema.fields]
+    assert "tax_id" not in invoice and {"issuer_tax_id", "recipient_tax_id", "bank_account_number"} <= set(invoice)
+    tax_invoice = [f.field_name for f in registry.select("TAX_INVOICE").schema.fields]
+    # a tax invoice prints no total including VAT; its selling price is extracted instead
+    assert "total_amount" not in tax_invoice and "selling_price_amount" in tax_invoice
+    request = registry.select("PAYMENT_REQUEST")
+    assert {"billing_period", "bank_name", "bank_account_number"} <= {f.field_name for f in request.schema.fields}
+    assert "Pembulatan" in request.descriptions.get("total_amount", registry.fields["total_amount"].description)
+    assert "never a balance, PIN or credential" in request.descriptions["bank_account_number"]

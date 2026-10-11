@@ -441,3 +441,62 @@ Ukuran keberhasilan pengelolaan: operator dapat menambahkan kategori dengan kema
 Catatan historis (sebelum phase D): pada analisis kode saat itu, suite melalui `.venv-win\Scripts\python.exe -m pytest` menghasilkan 522 passed, 41 skipped, dan 1 failed. Kegagalan berada pada pemeriksaan frontend lokal yang juga menolak teks placeholder URL. PostgreSQL tidak diverifikasi karena DSN pengujian tidak tersedia.
 
 Hasil tes tersebut bukan bukti akurasi OCR, klasifikasi, atau ekstraksi pada koleksi ini. Suite tidak dijalankan ulang untuk penulisan dokumen Markdown ini. Penyelarasan terhadap repository spesifikasi eksternal, inference seluruh koleksi, dan perubahan konfigurasi runtime belum dilakukan.
+
+## 14. Evaluasi terukur dan title rules v3
+
+Evaluasi dijalankan dengan `tlkdoc eval` (lihat [cli-reference](manual/cli-reference.md)) pada koleksi sampel privat
+yang disimpan di luar repository. Pembagian dev/holdout dilakukan per paket dokumen. Aturan disetel hanya pada dev,
+lalu diukur satu kali pada holdout. Label pada pengukuran ini masih berupa draf dari nama file dan belum diverifikasi
+manusia. Angkanya karena itu menjadi indikasi, belum klaim akurasi.
+
+| Profil | Akurasi dev | Akurasi holdout | Kategori salah, bukan UNKNOWN (dev / holdout) |
+|---|---:|---:|---:|
+| Seed v2 | 0,78 | 0,74 | 7 / 3 |
+| Seed v3 | 0,94 | 0,98 | 1 / 2 |
+
+Perubahan seed v3 (taksonomi tetap `business-documents-2`):
+
+- **Permohonan pembayaran.** Surat permintaan pembayaran umumnya ditulis "Perihal: Permohonan Pembayaran". Aturan
+  `PAYMENT_REQUEST` kini mengenali istilah itu dan diletakkan paling depan, karena surat tersebut menyebut lampirannya
+  (kwitansi, invoice, faktur pajak).
+- **Jendela judul 20 blok.** Kop surat dan alamat sering memakan delapan blok OCR pertama, sehingga judul berada di
+  luar jendela lama.
+- **Rujukan dalam kalimat bukan judul.** Frasa seperti "sesuai dengan kontrak", "berdasarkan kontrak pesanan",
+  "disampaikan permohonan pembayaran" dan "SPK/SPJB/SPP" pada kolom formulir tidak lagi menentukan kategori.
+- **Berita acara yang bukan penerimaan.** "Berita acara perubahan" (adendum) dan "berita acara kesepakatan" tidak lagi
+  jatuh ke `ACCEPTANCE_REPORT`. Kata "tagihan" tidak lagi cukup untuk `INVOICE`.
+
+Batas yang tersisa:
+
+- Nota dinas berjudul "Permohonan Pembayaran" masih terbaca sebagai `PAYMENT_REQUEST`. Kasus ini membutuhkan kategori
+  `INTERNAL_MEMORANDUM` atau pengecualian per aturan; regex saja tidak memadai.
+- Dokumen yang judulnya hanya berupa logo atau gambar tetap abstain ke `UNKNOWN`.
+
+### Registry field v2
+
+Evaluasi ekstraksi field dengan LLM lokal menunjukkan beberapa definisi field yang ambigu. Registry `business-documents-fields`
+kini versi 2. Schema yang berubah naik ke versi 2: `common-header`, `invoice-header`, `tax-invoice-header`,
+`receipt-header` dan `payment-request-header`.
+
+| Temuan | Perubahan |
+|---|---|
+| Invoice dapat mencetak NPWP penjual dan pembeli | `tax_id` diganti `issuer_tax_id` dan `recipient_tax_id`. `tax_id` tetap ada di katalog sebagai field usang. |
+| Faktur pajak tidak mencetak total yang sudah termasuk PPN | `total_amount` dihapus dari faktur pajak dan diganti `selling_price_amount` (Harga Jual/Penggantian). |
+| Total eksak dan total "Pembulatan" tercetak bersama | Deskripsi `total_amount` menetapkan nilai pembulatan. |
+| Subtotal tertukar dengan total | Deskripsi `subtotal_amount` merujuk baris di atas DPP dan pajak. |
+| Penerbit sering hanya berupa logo | `issuer_name` hanya diisi dari teks; jika penerbit hanya tampil sebagai logo, field ini MISSING. |
+| Rekening tujuan dan periode diperlukan untuk pemeriksaan antardokumen | Field baru `bank_name` dan `bank_account_number` (SPP, invoice). `billing_period` ditambahkan ke SPP; `reference_document_number` dan `issuer_tax_id` ke kuitansi. `amount_in_words` ditambahkan ke invoice. |
+
+Hasil pada 40 dokumen inti dari 10 paket holdout (nilai acuan masih draf):
+
+- Presisi naik dari 0,74 ke 0,76 dan recall dari 0,63 ke 0,69.
+- Nominal membaik: total 12 → 19 dari 20, PPN 14 → 20 dari 20, DPP 9 → 16 dari 17.
+- Nomor rekening benar 17 dari 17.
+
+Dampak bagi konsumen: hasil invoice tidak lagi memuat `tax_id`. Versi schema yang dipakai tercatat di
+`provenance.extraction_schema`. Instalasi yang sudah berjalan tetap memakai registry aktifnya sampai administrator
+mengaktifkan seed baru. Nomor rekening adalah data sensitif. Kebijakan masking di keluaran API belum diterapkan dan
+menjadi pekerjaan berikutnya.
+
+Setelah registry berubah, slot field di manifest evaluasi diselaraskan dengan
+`tlkdoc eval sync-fields --rename tax_id=issuer_tax_id`.

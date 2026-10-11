@@ -238,6 +238,8 @@ The package is activated as a whole (validated references, types, known normaliz
 
 ### Title rules (seed profile v2, taxonomy `business-documents-2`)
 
+Seed profile v3 supersedes these rules after an evaluation on a private sample collection. It keeps the same taxonomy; see [DOCUMENT-CATEGORIES §14](DOCUMENT-CATEGORIES-AND-EXTRACTION-FIELDS.md).
+
 - **New rules.** `WORK_INSPECTION_REPORT`, `HANDOVER_REPORT`, `PAYMENT_REPORT` and `SERVICE_USAGE_REPORT` are matched on descriptive headings only (no abbreviations), before the generic `berita acara` → `ACCEPTANCE_REPORT`.
 - **Consumer-visible change.** "Berita Acara Serah Terima" is now `HANDOVER_REPORT` instead of `ACCEPTANCE_REPORT`. This is why the taxonomy version changed. Existing installations keep their active configuration until an administrator activates the new one.
 - **`match_policy`.** `FIRST_RULE` (default, previous behaviour) or `EARLIEST_MATCH`: the heading match that starts first wins, and ties keep profile order. This resolves pages that mention several category terms, for example an invoice that references an order letter.
