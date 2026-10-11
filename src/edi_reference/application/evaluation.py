@@ -98,6 +98,28 @@ def validate_manifest(manifest: dict) -> None:
                 raise ValueError(f"INVALID_FIELD_STATUS:{doc['doc_key']}:{name}")
 
 
+def sync_field_slots(manifest: dict, schema_fields: dict[str, list[str]],
+                     renames: dict[str, str] | None = None) -> dict[str, int]:
+    """Align field slots with the current schemas after a registry change.
+
+    Renamed fields keep their value and status; new fields get `todo` slots; fields the
+    schema no longer has are dropped. Only documents that already have field slots change.
+    """
+    renames = renames or {}
+    counts = {"renamed": 0, "added": 0, "dropped": 0}
+    for doc in manifest["documents"]:
+        if not doc.get("fields") or doc["expected_type"] not in schema_fields:
+            continue
+        current = {renames.get(name, name): slot for name, slot in doc["fields"].items()}
+        counts["renamed"] += sum(name in renames for name in doc["fields"])
+        wanted = schema_fields[doc["expected_type"]]
+        counts["dropped"] += sum(name not in wanted for name in current)
+        counts["added"] += sum(name not in current for name in wanted)
+        doc["fields"] = {name: current.get(name, {"value": None, "status": "todo"}) for name in wanted}
+    validate_manifest(manifest)
+    return counts
+
+
 # ---------------------------------------------------------------- review sheet
 REVIEW_COLUMNS = ("doc_key", "kind", "name", "value", "status", "note", "verified")
 

@@ -21,6 +21,7 @@ from edi_reference.application.evaluation import (
     init_manifest,
     review_rows,
     score,
+    sync_field_slots,
     validate_manifest,
 )
 from edi_reference.application.runtime_installer import runtime_python
@@ -73,6 +74,12 @@ def add_parsers(commands, *, runtime_root: Path) -> None:
     imp.add_argument("sheet", type=Path)
     imp.add_argument("--manifest", type=Path, default=EVAL_ROOT / "manifest.json")
 
+    sync = sub.add_parser("sync-fields", help="align field slots with the current registry after it changed")
+    sync.add_argument("--manifest", type=Path, default=EVAL_ROOT / "manifest.json")
+    sync.add_argument("--extraction-registry", type=Path, default=SEED_REGISTRY)
+    sync.add_argument("--rename", action="append", default=[], metavar="OLD=NEW",
+                      help="carry a field's value and status over to its new name (repeatable)")
+
     sc = sub.add_parser("score", help="score predictions against verified labels")
     sc.add_argument("--manifest", type=Path, default=EVAL_ROOT / "manifest.json")
     sc.add_argument("--predictions", type=Path, required=True)
@@ -86,7 +93,8 @@ def add_parsers(commands, *, runtime_root: Path) -> None:
 def run(args: argparse.Namespace) -> int:
     try:
         return {"init": _init, "run": _run, "score": _score, "review-export": _review_export,
-                "review-import": _review_import}[args.eval_command](args)
+                "review-import": _review_import,
+                "sync-fields": _sync_fields}[args.eval_command](args)
     except (ValueError, LookupError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -253,4 +261,18 @@ def _review_import(args) -> int:
         changed = apply_review(manifest, csv.DictReader(stream, dialect=dialect))
     _write_json(args.manifest, manifest)
     print(f"updated {changed} entries in {args.manifest}")
+    return 0
+
+
+def _sync_fields(args) -> int:
+    from edi_reference.application.extraction_registry import registry_from_dict
+
+    manifest = _load(args.manifest)
+    validate_manifest(manifest)
+    registry = registry_from_dict(_load(args.extraction_registry))
+    renames = dict(item.split("=", 1) for item in args.rename if "=" in item)
+    schema_fields = {t: [f.field_name for f in s.fields] for t, s in registry.categories.items()}
+    counts = sync_field_slots(manifest, schema_fields, renames)
+    _write_json(args.manifest, manifest)
+    print(f"field slots: {counts['renamed']} renamed, {counts['added']} added (todo), {counts['dropped']} dropped")
     return 0

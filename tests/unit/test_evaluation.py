@@ -198,3 +198,21 @@ def test_money_compares_by_value_not_by_printed_precision():
                    value_types=TYPES, normalize=lambda value_type, raw: raw.replace(".", ""),
                    options=ScoreOptions(taxonomy=TAXONOMY))
     assert report["fields"]["per_field"]["total_amount"]["correct"] == 1
+
+
+def test_sync_field_slots_keeps_verified_values_across_renames():
+    from edi_reference.application.evaluation import sync_field_slots
+
+    manifest = manifest_with(("a_inv", "INVOICE", "verified", "dev",
+                              {"tax_id": {"value": "01.234.567.8-901.000", "status": "verified"},
+                               "total_amount": {"value": "100.00", "status": "draft"},
+                               "old_field": {"value": "x", "status": "draft"}}),
+                             ("b_rcp", "RECEIPT", "verified", "dev", {}))
+    counts = sync_field_slots(manifest, {"INVOICE": ["total_amount", "issuer_tax_id", "bank_name"], "RECEIPT": ["total_amount"]},
+                              {"tax_id": "issuer_tax_id"})
+    fields = manifest["documents"][0]["fields"]
+    assert list(fields) == ["total_amount", "issuer_tax_id", "bank_name"]
+    assert fields["issuer_tax_id"] == {"value": "01.234.567.8-901.000", "status": "verified"}
+    assert fields["bank_name"] == {"value": None, "status": "todo"}
+    assert manifest["documents"][1]["fields"] == {}  # documents without field slots stay without
+    assert counts == {"renamed": 1, "added": 1, "dropped": 1}
