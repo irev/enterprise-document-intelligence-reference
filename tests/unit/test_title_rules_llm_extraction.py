@@ -236,11 +236,41 @@ def test_new_descriptive_berita_acara_rules_precede_the_generic_one():
 
 
 def test_earliest_match_policy_resolves_multiple_category_terms():
-    lines = ("INVOICE", "Referensi surat pesanan SYN-1")
-    assert classify(document(*lines)).document_type == "ORDER_LETTER"  # FIRST_RULE default: profile order
+    lines = ("SURAT PESANAN", "Lampiran invoice SYN-1")
+    assert classify(document(*lines)).document_type == "INVOICE"  # FIRST_RULE default: profile order
     profile = TitleRuleProfile(PROFILE.profile_id, PROFILE.version, PROFILE.taxonomy_version, PROFILE.rules,
                                PROFILE.heading_blocks, "EARLIEST_MATCH")
     result = classify_document(document(*lines), classifier=TitleRuleClassifier(profile), policy=POLICY, taxonomy=TAXONOMY)
-    assert result.document_type == "INVOICE" and [e.block_id for e in result.evidence] == ["b0"]
+    assert result.document_type == "ORDER_LETTER" and [e.block_id for e in result.evidence] == ["b0"]
     with pytest.raises(ValueError, match="INVALID_MATCH_POLICY"):
         TitleRuleProfile("p", "1", "t", PROFILE.rules, 8, "RANDOM")
+
+
+# Seed v3: cases found by evaluating the rules on a private sample collection (synthetic text here).
+@pytest.mark.parametrize(
+    ("lines", "expected"),
+    [
+        # payment request letters say "permohonan pembayaran", and list attachments by name
+        (("Nomor : 001/SYN/2026", "Perihal : Permohonan Pembayaran", "kwitansi dan invoice terlampir"), "PAYMENT_REQUEST"),
+        (("SPP", "Nomor SYN-1"), "PAYMENT_REQUEST"),
+        # "SPP" inside a form field list is not a payment request
+        (("PURCHASE ORDER", "No.SPK/SPJB/SPP : SYN-2"), "PURCHASE_ORDER"),
+        # an internal memo forwarding a payment request is not one itself
+        (("NOTA DINAS", "Bersama ini disampaikan permohonan pembayaran tagihan"), UNKNOWN_DOCUMENT_TYPE),
+        # references to a contract or order inside a sentence do not name the document
+        (("KUITANSI", "Sesuai dengan Kontrak Pengadaan SYN-3"), "RECEIPT"),
+        (("Tagihan termin 04", "Sesuai dengan Kontrak Pengadaan SYN-3"), UNKNOWN_DOCUMENT_TYPE),
+        (("KONTRAK PESANAN", "Nomor SYN-4"), "ORDER_LETTER"),
+        (("Permohonan Pembayaran", "Berdasarkan Kontrak Pesanan SYN-5"), "PAYMENT_REQUEST"),
+        # amendments and agreement minutes are not acceptance reports
+        (("BERITA ACARA PERUBAHAN",), UNKNOWN_DOCUMENT_TYPE),
+        (("BERITA ACARA KESEPAKATAN", "Harga satuan"), UNKNOWN_DOCUMENT_TYPE),
+    ],
+)
+def test_seed_v3_payment_request_and_reference_mentions(lines, expected):
+    assert classify(document(*lines)).document_type == expected
+
+
+def test_seed_v3_reads_past_letterhead_blocks():
+    letterhead = [f"Alamat kantor baris {n}" for n in range(12)]
+    assert classify(document(*letterhead, "KWITANSI")).document_type == "RECEIPT"
