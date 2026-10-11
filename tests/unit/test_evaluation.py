@@ -188,3 +188,13 @@ def test_review_sheet_round_trip(tmp_path):
     assert docs["a_inv"]["fields"]["tax_id"] == {"value": None, "status": "verified"}  # verified as absent
     assert (docs["b_bapp"]["expected_type"], docs["b_bapp"]["type_status"]) == ("PAYMENT_REPORT", "needs_review")
     assert docs["b_bapp"]["type_note"] == "isi berita acara pembayaran"
+
+
+def test_money_compares_by_value_not_by_printed_precision():
+    manifest = manifest_with(("a_inv", "INVOICE", "verified", "dev",
+                              {"total_amount": {"value": "58739868.00", "status": "verified"}}))
+    predicted = [{"field_name": "total_amount", "value_type": "money", "state": "PRESENT", "raw_value": "58.739.868"}]
+    report = score(manifest, {"a_inv": {"document_type": "INVOICE", "status": "COMPLETED", "fields": predicted}},
+                   value_types=TYPES, normalize=lambda value_type, raw: raw.replace(".", ""),
+                   options=ScoreOptions(taxonomy=TAXONOMY))
+    assert report["fields"]["per_field"]["total_amount"]["correct"] == 1

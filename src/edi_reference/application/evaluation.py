@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from decimal import Decimal, InvalidOperation
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,9 +161,21 @@ def canonical(value_type: str, raw: str | None, normalize: Canonicalizer) -> str
     """`normalize(value_type, raw)` returns a canonical string for typed values or None."""
     if raw is None:
         return None
-    if value_type in ("money", "date", "tax_id", "number"):
+    if value_type in ("money", "number"):
+        return _decimal(normalize(value_type, raw))
+    if value_type in ("date", "tax_id"):
         return normalize(value_type, raw)
     return loose_text(raw) or None
+
+
+def _decimal(value: str | None) -> str | None:
+    """Numbers compare by value: a printed `58.739.868` equals an expected `58739868.00`."""
+    if value is None:
+        return None
+    try:
+        return format(Decimal(value).normalize(), "f")
+    except InvalidOperation:
+        return value
 
 
 def expected_canonical(value_type: str, value: str | None) -> str | None:
@@ -170,7 +183,9 @@ def expected_canonical(value_type: str, value: str | None) -> str | None:
         return None
     if value_type == "tax_id":
         return re.sub(r"\D", "", value)
-    if value_type in ("money", "number", "date"):
+    if value_type in ("money", "number"):
+        return _decimal(value.strip())
+    if value_type == "date":
         return value.strip()
     return loose_text(value)
 
