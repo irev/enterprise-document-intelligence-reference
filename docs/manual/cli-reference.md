@@ -394,6 +394,7 @@ tlkdoc eval review-export                                  # CSV sheet for peopl
 tlkdoc eval review-import .edi/eval/review.csv             # write the verified sheet back
 tlkdoc eval run --mode rules --no-llm [--split dev]        # run the panel pipeline; resumable
 tlkdoc eval score --predictions .edi/eval/predictions-rules-nollm.jsonl [--split holdout]
+tlkdoc eval sync-fields [--rename OLD=NEW]                 # align field slots after a registry change
 ```
 
 - File-name labels are drafts. Ambiguous labels are `needs_review`. Only `verified` labels are scored, unless
