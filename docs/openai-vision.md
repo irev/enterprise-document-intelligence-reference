@@ -59,8 +59,11 @@ operator responsibility; document data cannot select the endpoint.
   Input limits cover the complete JSON request including base64 expansion;
   output limits cover the HTTP JSON envelope as well as extracted content.
 - Image signatures are checked, but image decoding is left to the server.
-  PDF rendering, page selection and multipage source mapping belong to #40.
-  No OCR/model/image SDK dependency is added to the core or adapter.
+  PDF rendering and page selection are provided by the optional
+  [document image preparer](document-images.md). Preserve its source-page mapping
+  when assigning derived image observations. Multipage prediction aggregation
+  and API-worker integration remain separate work.
+  No OCR/model/image SDK dependency is added to this analyzer or the core.
 
 ## Contract references and verification
 

@@ -14,9 +14,9 @@ from pathlib import Path
 def main(work: Path) -> None:
     os.environ.update(HF_HUB_OFFLINE="1", PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK="True")
     request = json.loads((work / "request.json").read_text(encoding="utf-8"))
-    import pypdfium2 as pdfium  # type: ignore[import-not-found]
+    import pypdfium2 as pdfium  # type: ignore[import-untyped]
     from paddleocr import PaddleOCR  # type: ignore[import-not-found]
-    from PIL import Image  # type: ignore[import-not-found]
+    from PIL import Image
 
     Image.MAX_IMAGE_PIXELS = 50_000_000
     source = work / "input"
@@ -38,8 +38,8 @@ def main(work: Path) -> None:
     else:
         total = 1
         target = work / "page-000.png"
-        with Image.open(source) as image:
-            image.convert("RGB").save(target)
+        with Image.open(source) as source_image:
+            source_image.convert("RGB").save(target)
         images.append(target)
 
     ocr = request["ocr"]
